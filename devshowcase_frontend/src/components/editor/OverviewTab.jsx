@@ -12,6 +12,7 @@ const OverviewTab = ({ project, onUpdate }) => {
     category: project.category,
     github_url: project.github_url,
     demo_url: project.demo_url,
+
   })
   const [generatingSandbox, setGeneratingSandbox] = useState(false)
   const [sandboxActive, setSandboxActive] = useState(project.sandbox_available || false)

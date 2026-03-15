@@ -17,14 +17,23 @@
   border-radius: var(--radius-lg);
   padding: 1.5rem;
   height: fit-content;
+  max-height: 85vh;
   position: sticky;
   top: 80px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .endpoints-list {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  /* Enable hardware acceleration for smooth scrolling */
+  transform: translateZ(0);
+  -webkit-overflow-scrolling: touch;
+  flex: 1;
+  min-height: 0; /* Important for flex scrolling */
 }
 
 .endpoint-item {
@@ -36,17 +45,22 @@
   cursor: pointer;
   transition: all var(--transition-fast);
   text-align: left;
+  /* Optimize for performance */
+  will-change: transform, background-color, border-color;
+  contain: layout style paint;
 }
 
 .endpoint-item:hover {
   border-color: var(--border-secondary);
   box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
 }
 
 .endpoint-item.active {
   background: var(--bg-tertiary);
   border-color: var(--accent-primary);
   box-shadow: 0 0 0 3px var(--accent-glow);
+  transform: translateY(-1px);
 }
 
 .endpoint-header {
@@ -59,6 +73,11 @@
   font-size: 0.9375rem;
   font-weight: 600;
   color: var(--text-primary);
+  /* Prevent text overflow issues */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
 }
 
 .endpoint-url {
@@ -66,10 +85,16 @@
   color: var(--text-tertiary);
   margin-top: 0.5rem;
   word-break: break-all;
+  /* Limit height to prevent layout shifts */
+  max-height: 2.5em;
+  overflow: hidden;
+  line-height: 1.25;
 }
 
 .playground-content {
   min-height: 400px;
+  /* Optimize for performance */
+  contain: layout style paint;
 }
 
 .endpoint-details {
@@ -105,4 +130,23 @@
   min-height: 400px;
   text-align: center;
   color: var(--text-tertiary);
+}
+
+/* Performance optimizations for large lists */
+.endpoints-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.endpoints-list::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+  border-radius: 3px;
+}
+
+.endpoints-list::-webkit-scrollbar-thumb {
+  background: var(--border-secondary);
+  border-radius: 3px;
+}
+
+.endpoints-list::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
 }

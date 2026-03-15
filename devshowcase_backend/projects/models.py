@@ -13,6 +13,7 @@ class Project(models.Model):
     category = models.CharField(max_length=100, blank=True)
     github_url = models.URLField(blank=True)
     demo_url = models.URLField(blank=True)
+    live_base_url = models.URLField(blank=True, help_text="Base URL for live API testing, e.g. https://myapi.com")
     is_published = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     
@@ -95,6 +96,14 @@ class Endpoint(models.Model):
     
     # Code samples for different languages
     code_samples = models.JSONField(default=dict, blank=True)
+    
+    # AST Security Analysis fields
+    ast_security_level = models.CharField(max_length=50, blank=True, help_text="AST-detected security level")
+    ast_confidence_score = models.FloatField(null=True, blank=True, help_text="Confidence in AST security classification (0.0-1.0)")
+    detected_decorators = models.JSONField(default=list, blank=True, help_text="Security decorators detected by AST")
+    security_features = models.JSONField(default=list, blank=True, help_text="Security features detected by AST")
+    ast_reasoning = models.TextField(blank=True, help_text="AST analysis reasoning")
+    user_security_override = models.CharField(max_length=50, blank=True, help_text="User's manual security level override")
     
     def __str__(self):
         return f"{self.method} {self.name}"

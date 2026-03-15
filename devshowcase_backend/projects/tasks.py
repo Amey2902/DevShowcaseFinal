@@ -55,6 +55,10 @@ def process_upload_pipeline(upload_id):
         extractor = EndpointExtractor(upload, base_url=base_url)
         endpoints_count = extractor.extract_endpoint_details(analysis_result['endpoints'])
 
+        # Save detected base_url to project for live mode testing
+        upload.project.live_base_url = base_url
+        upload.project.save(update_fields=['live_base_url'])
+
         # Step 5: Generate Architecture (if requested)
         architecture_nodes_created = 0
         if upload.generate_architecture:

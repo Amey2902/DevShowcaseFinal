@@ -98,6 +98,12 @@ class EndpointExtractor:
                             request_schema=endpoint_data.get('request_schema', {}),
                             response_schema=endpoint_data.get('response_schema', {}),
                             auto_detected=True,
+                            # AST Security Analysis fields
+                            ast_security_level=endpoint_data.get('ast_security_level', ''),
+                            ast_confidence_score=endpoint_data.get('ast_confidence_score'),
+                            detected_decorators=endpoint_data.get('detected_decorators', []),
+                            security_features=endpoint_data.get('security_features', []),
+                            ast_reasoning=endpoint_data.get('ast_reasoning', ''),
                         )
 
                         saved_count += 1

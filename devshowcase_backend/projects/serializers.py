@@ -20,12 +20,40 @@ class EndpointSerializer(serializers.ModelSerializer):
         model = Endpoint
         fields = ['id', 'project', 'name', 'method', 'url', 'headers', 'sample_body', 'description', 'sample_response',
                   'detected_from_file', 'detected_at_line', 'path_parameters', 'query_parameters', 
-                  'auth_required', 'auth_type', 'request_schema', 'response_schema', 'auto_detected', 'code_samples']
+                  'auth_required', 'auth_type', 'request_schema', 'response_schema', 'auto_detected', 'code_samples',
+                  'ast_security_level', 'ast_confidence_score', 'detected_decorators', 'security_features', 
+                  'ast_reasoning', 'user_security_override']
     
     def validate_url(self, value):
         forbidden_patterns = [
-            'admin', 'payment', 'stripe', 'razorpay', 'internal'
+            # Admin & Management
+            'admin', 'management', 'dashboard', 'control-panel',
+            
+            # Payment & Financial
+            'payment', 'stripe', 'razorpay', 'paypal', 'billing', 'invoice',
+            'checkout', 'transaction', 'refund', 'subscription',
+            
+            # Authentication & Security
+            'auth/token', 'oauth', 'jwt', 'refresh-token', 'reset-password',
+            'verify-email', 'two-factor', '2fa', 'mfa',
+            
+            # Internal & System
+            'internal', 'private', 'system', 'debug', 'test-only',
+            'health-check', 'metrics', 'monitoring', 'logs',
+            
+            # Database & Infrastructure
+            'database', 'db-admin', 'backup', 'restore', 'migration',
+            'redis', 'cache-clear', 'queue',
+            
+            # User Management (sensitive)
+            'delete-user', 'ban-user', 'admin-users', 'user-roles',
+            'permissions', 'access-control',
+            
+            # Configuration & Secrets
+            'config', 'settings', 'environment', 'secrets', 'keys',
+            'webhook-secret', 'api-secret'
         ]
+        
         value_lower = value.lower()
         for pattern in forbidden_patterns:
             if pattern in value_lower:
@@ -37,7 +65,25 @@ class EndpointSerializer(serializers.ModelSerializer):
         if not isinstance(value, dict):
             return value
 
-        forbidden_keys = ['api-key', 'secret', 'bearer sk_']
+        forbidden_keys = [
+            # API Keys & Secrets
+            'api-key', 'api_key', 'apikey', 'secret', 'secret-key', 'secret_key',
+            'private-key', 'private_key', 'token', 'access-token', 'access_token',
+            
+            # Payment Keys
+            'bearer sk_', 'stripe-key', 'razorpay-key', 'paypal-secret',
+            
+            # Authentication
+            'authorization', 'auth-token', 'jwt-token', 'refresh-token',
+            'session-id', 'session_id', 'csrf-token', 'csrf_token',
+            
+            # Database & Infrastructure
+            'db-password', 'db_password', 'redis-password', 'redis_password',
+            'aws-secret', 'aws_secret', 'gcp-key', 'azure-key',
+            
+            # Webhooks & Integration
+            'webhook-secret', 'webhook_secret', 'signing-secret', 'signing_secret'
+        ]
         
         for key, val in value.items():
             key_lower = key.lower()
@@ -62,7 +108,7 @@ class ProjectSerializer(serializers.ModelSerializer):
     class Meta:
         model = Project
         fields = ['id', 'owner', 'owner_username', 'title', 'slug', 'short_description', 
-                  'problem_statement', 'category', 'github_url', 'demo_url', 
+                  'problem_statement', 'category', 'github_url', 'demo_url', 'live_base_url',
                   'is_published', 'created_at', 'sandbox_available']
         read_only_fields = ['owner', 'slug', 'created_at', 'sandbox_available']
     
@@ -81,7 +127,7 @@ class ProjectFullSerializer(serializers.ModelSerializer):
     class Meta:
         model = Project
         fields = ['id', 'owner', 'owner_username', 'title', 'slug', 'short_description',
-                  'problem_statement', 'category', 'github_url', 'demo_url',
+                  'problem_statement', 'category', 'github_url', 'demo_url', 'live_base_url',
                   'is_published', 'created_at', 'tech_stack', 'architecture_nodes',
                   'endpoints', 'timeline_events', 'sandbox_available']
     

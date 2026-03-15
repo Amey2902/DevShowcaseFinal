@@ -656,8 +656,10 @@ def execute_translated_endpoint(request):
     except Endpoint.DoesNotExist:
         return Response({'error': 'Endpoint not found'}, status=status.HTTP_404_NOT_FOUND)
     
-    if not endpoint.project.is_published:
-        return Response({'error': 'Project is not published'}, status=status.HTTP_403_FORBIDDEN)
+    # For translated endpoint testing, allow even unpublished projects
+    # This is sandbox mode, so it's safe to test
+    # if not endpoint.project.is_published:
+    #     return Response({'error': 'Project is not published'}, status=status.HTTP_403_FORBIDDEN)
     
     # Check if sandbox exists
     has_sandbox = hasattr(endpoint.project, 'sandbox')

@@ -114,12 +114,15 @@ class TranslationExecutor:
         }
         
         for param in path_parameters:
+            # Handle both object and string parameters
+            param_name = param if isinstance(param, str) else (param.get('name') if isinstance(param, dict) else str(param))
+            
             # Use custom value if provided, otherwise use sample value
-            value = custom_values.get(param) or sample_values.get(param, '123')
+            value = custom_values.get(param_name) or sample_values.get(param_name, '123')
             
             # Replace both :param and {param} formats
-            resolved_url = re.sub(f':{param}\\b', value, resolved_url)
-            resolved_url = re.sub(f'\\{{{param}\\}}', value, resolved_url)
+            resolved_url = re.sub(f':{param_name}\\b', str(value), resolved_url)
+            resolved_url = re.sub(f'\\{{{param_name}\\}}', str(value), resolved_url)
         
         return resolved_url
     
@@ -155,7 +158,13 @@ class TranslationExecutor:
         # Add framework-specific metadata
         if target_framework == 'fastapi':
             # FastAPI often includes request metadata
-            wrapped_data['request_id'] = f"req_{hash(str(original_data)) % 10000:04d}"
+            try:
+                # Convert data to string first to avoid unhashable type errors
+                data_str = json.dumps(original_data, sort_keys=True) if original_data else "empty"
+                wrapped_data['request_id'] = f"req_{hash(data_str) % 10000:04d}"
+            except (TypeError, ValueError):
+                # Fallback if JSON serialization fails
+                wrapped_data['request_id'] = f"req_{abs(id(original_data)) % 10000:04d}"
         elif target_framework == 'spring':
             # Spring Boot often includes timestamp
             import datetime

@@ -87,12 +87,20 @@ class AnalysisEngine:
             endpoints_data = self._analyze_with_ai(code_files, framework, directory_path)
             
             print(f"Found {len(endpoints_data)} endpoints")
+            
+            # Perform AST security analysis
+            self.upload.current_message = 'Analyzing endpoint security with AST...'
+            self.upload.progress_percentage = 75
+            self.upload.save()
+            
+            endpoints_with_security = self._analyze_endpoint_security(endpoints_data, directory_path, language)
+            
             print(f"=== Analysis Complete ===")
             
             return {
                 'detected_language': language,
                 'detected_framework': framework,
-                'endpoints': endpoints_data,
+                'endpoints': endpoints_with_security,
                 'base_url': base_url
             }
             
@@ -285,56 +293,92 @@ class AnalysisEngine:
         raise ValueError("Project directory appears to be empty or inaccessible")
     
     def _detect_base_url(self, code_files, framework):
-        """Detect the base URL (host:port) from code."""
+        """Detect the base URL (host:port) from code, .env, and server entry files."""
         import re
-        
-        # Common patterns to look for
+        from pathlib import Path
+
         patterns = [
-            r'app\.listen\((\d+)',  # Express: app.listen(5000)
-            r'PORT\s*=\s*(\d+)',  # PORT = 5000
-            r'port\s*=\s*(\d+)',  # port = 5000
-            r'PORT:\s*(\d+)',  # PORT: 5000
-            r'\.listen\((\d+)',  # .listen(5000)
-            r'host.*?:(\d+)',  # host: 'localhost:5000'
+            r'app\.listen\(\s*(\d+)',       # app.listen(5000)
+            r'\.listen\(\s*(\d+)',           # server.listen(5000)
+            r'PORT\s*[=:]\s*["\']?(\d+)',   # PORT = 5000 or PORT: "5000"
+            r'port\s*[=:]\s*["\']?(\d+)',   # port = 5000
+            r'localhost:(\d+)',              # localhost:5000
         ]
-        
+
         detected_port = None
-        
-        # Search through code files for port configuration
-        for file_path in code_files[:10]:  # Check first 10 files
+
+        # Priority 1: check .env files in the project root
+        env_candidates = []
+        if code_files:
+            root = code_files[0].parent
+            while root.name:  # walk up to find .env
+                env_candidates += list(root.glob('.env')) + list(root.glob('.env.*'))
+                root = root.parent
+                if len(env_candidates) > 5:
+                    break
+
+        for env_file in env_candidates[:3]:
             try:
-                content = file_path.read_text(encoding='utf-8', errors='ignore')
-                
+                content = env_file.read_text(encoding='utf-8', errors='ignore')
                 for pattern in patterns:
                     matches = re.findall(pattern, content, re.IGNORECASE)
                     if matches:
-                        detected_port = matches[0]
-                        break
-                
+                        port = matches[0]
+                        if 1000 <= int(port) <= 65535:
+                            detected_port = port
+                            break
                 if detected_port:
                     break
-                    
             except Exception:
                 continue
-        
-        # Build base URL
+
+        # Priority 2: check server entry files (server.js, app.js, index.js, main.py, etc.)
+        if not detected_port and code_files:
+            entry_names = {'server.js', 'app.js', 'index.js', 'main.js', 'server.ts',
+                           'app.ts', 'index.ts', 'main.py', 'app.py', 'wsgi.py', 'asgi.py'}
+            entry_files = [f for f in code_files if f.name.lower() in entry_names]
+            other_files = [f for f in code_files if f not in entry_files]
+
+            for file_path in (entry_files + other_files)[:15]:
+                try:
+                    content = file_path.read_text(encoding='utf-8', errors='ignore')
+                    for pattern in patterns:
+                        matches = re.findall(pattern, content, re.IGNORECASE)
+                        for m in matches:
+                            try:
+                                port_int = int(m)
+                                # Skip common frontend ports (3000 is Vite/CRA default, 5173 is Vite)
+                                if port_int in (3000, 5173, 4200, 8080) and framework in ('Web Application', 'Generic Project'):
+                                    continue
+                                if 1000 <= port_int <= 65535:
+                                    detected_port = m
+                                    break
+                            except ValueError:
+                                continue
+                        if detected_port:
+                            break
+                    if detected_port:
+                        break
+                except Exception:
+                    continue
+
         if detected_port:
             return f'http://localhost:{detected_port}'
-        else:
-            # Default ports by framework
-            default_ports = {
-                'Express.js': 3000,
-                'Flask': 5000,
-                'Django': 8000,
-                'FastAPI': 8000,
-                'NestJS': 3000,
-                'Spring Boot': 8080,
-                'ASP.NET': 5000,
-                'Web Application': 3000,
-                'Generic Project': 3000,
-            }
-            port = default_ports.get(framework, 3000)
-            return f'http://localhost:{port}'
+
+        # Fallback defaults by framework
+        default_ports = {
+            'Express.js': 5000,
+            'Flask': 5000,
+            'Django': 8000,
+            'FastAPI': 8000,
+            'NestJS': 3000,
+            'Spring Boot': 8080,
+            'ASP.NET': 5000,
+            'Web Application': 8000,
+            'Generic Project': 8000,
+        }
+        port = default_ports.get(framework, 8000)
+        return f'http://localhost:{port}'
 
     
     def _find_code_files(self, directory_path, language):
@@ -611,11 +655,16 @@ Find any patterns that look like web API endpoints.'''
         
         hint = framework_hints.get(framework, 'Look for ALL HTTP endpoint definitions')
         
-        prompt = f"""You are analyzing a {framework} project to detect API endpoints.
+        prompt = f"""You are analyzing a {framework} project to detect BACKEND API endpoints only.
 
 {hint}
 
-CRITICAL: Find and list EVERY SINGLE endpoint in the code below. Do not skip any.
+CRITICAL RULES:
+1. Find and list EVERY SINGLE backend API endpoint in the code below. Do not skip any.
+2. ONLY include real HTTP API endpoints that a server handles and returns data from (like Express routes, Flask routes, Django URLs, FastAPI routes, etc.)
+3. DO NOT include React Router routes, Vue Router routes, Angular routes, or any frontend client-side routing (e.g. <Route path="/home">, createBrowserRouter, useNavigate, history.push, etc.)
+4. DO NOT include frontend page components or navigation links as endpoints.
+5. If this is a pure frontend project (React, Vue, Angular) with NO backend server code, return {{"endpoints": []}}
 
 Project Code:
 {code_text}
@@ -640,9 +689,7 @@ Return your response in this EXACT JSON format (no markdown, no extra text):
   ]
 }}
 
-IMPORTANT: Include ALL endpoints you find, even if there are 10, 20, or more. Do not summarize or skip any.
-
-If you find NO endpoints, return: {{"endpoints": []}}
+IMPORTANT: Include ALL backend API endpoints you find. If this is frontend-only with no server, return {{"endpoints": []}}.
 
 Return ONLY the JSON object, nothing else."""
         
@@ -758,3 +805,135 @@ Return ONLY the JSON object, nothing else."""
                 raise ValueError(f"Groq AI error: {str(e)}")
         
         raise ValueError("Failed to get response from Groq AI after retries")
+    
+    def _analyze_endpoint_security(self, endpoints_data, directory_path, language):
+        """
+        Analyze endpoint security using AST analysis.
+        
+        Args:
+            endpoints_data: List of endpoint dictionaries from AI analysis
+            directory_path: Path to project directory
+            language: Detected programming language
+            
+        Returns:
+            List of endpoints with security analysis added
+        """
+        from .ast_analyzer import ASTSecurityAnalyzer, JavaScriptASTAnalyzer
+        
+        print(f"=== Starting AST Security Analysis ===")
+        print(f"Language: {language}")
+        print(f"Endpoints to analyze: {len(endpoints_data)}")
+        
+        try:
+            if language == 'python':
+                # Use Python AST analyzer
+                analyzer = ASTSecurityAnalyzer()
+                security_results = analyzer.analyze_project_security(directory_path, endpoints_data)
+            
+            elif language in ['javascript', 'typescript']:
+                # Use JavaScript/TypeScript analyzer
+                analyzer = JavaScriptASTAnalyzer()
+                security_results = {}
+                
+                # Read file contents for JS/TS analysis
+                for endpoint_data in endpoints_data:
+                    file_path = endpoint_data.get('file', '')
+                    if file_path:
+                        try:
+                            full_path = os.path.join(directory_path, file_path)
+                            with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
+                                file_content = f.read()
+                            
+                            endpoint_key = f"{endpoint_data.get('method', 'GET')}:{endpoint_data.get('path', '')}"
+                            analysis = analyzer.analyze_endpoint_security(endpoint_data, file_content)
+                            security_results[endpoint_key] = analysis
+                            
+                        except Exception as e:
+                            print(f"Error analyzing JS/TS endpoint {endpoint_data}: {e}")
+                            continue
+            
+            else:
+                # For other languages, provide basic analysis based on patterns
+                security_results = self._basic_security_analysis(endpoints_data)
+            
+            # Merge security analysis with endpoint data
+            enhanced_endpoints = []
+            for endpoint_data in endpoints_data:
+                endpoint_key = f"{endpoint_data.get('method', 'GET')}:{endpoint_data.get('path', '')}"
+                
+                if endpoint_key in security_results:
+                    analysis = security_results[endpoint_key]
+                    
+                    # Add security analysis to endpoint data
+                    endpoint_data['ast_security_level'] = analysis.security_level.value
+                    endpoint_data['ast_confidence_score'] = analysis.confidence_score
+                    endpoint_data['detected_decorators'] = analysis.detected_decorators
+                    endpoint_data['security_features'] = analysis.security_features
+                    endpoint_data['ast_reasoning'] = analysis.reasoning
+                    
+                    print(f"Enhanced {endpoint_key}: {analysis.security_level.value} (confidence: {analysis.confidence_score:.2f})")
+                
+                enhanced_endpoints.append(endpoint_data)
+            
+            print(f"=== AST Security Analysis Complete ===")
+            return enhanced_endpoints
+            
+        except Exception as e:
+            print(f"AST Security Analysis failed: {e}")
+            # Return original endpoints without security analysis if AST fails
+            return endpoints_data
+    
+    def _basic_security_analysis(self, endpoints_data):
+        """
+        Provide basic security analysis for unsupported languages.
+        
+        Args:
+            endpoints_data: List of endpoint dictionaries
+            
+        Returns:
+            Dict of security analysis results
+        """
+        from .ast_analyzer import SecurityLevel, SecurityAnalysis
+        
+        results = {}
+        
+        for endpoint_data in endpoints_data:
+            method = endpoint_data.get('method', 'GET')
+            path = endpoint_data.get('path', '').lower()
+            name = endpoint_data.get('name', '').lower()
+            
+            # Basic pattern matching
+            if any(keyword in f"{path} {name}" for keyword in ['admin', 'delete', 'remove', 'destroy']):
+                security_level = SecurityLevel.ADMIN_FUNCTIONS
+                confidence = 0.6
+                reasoning = "Admin/destructive patterns detected in path or name"
+            elif any(keyword in f"{path} {name}" for keyword in ['auth', 'login', 'token', 'password']):
+                security_level = SecurityLevel.SENSITIVE_DATA
+                confidence = 0.5
+                reasoning = "Authentication/sensitive data patterns detected"
+            elif method in ['DELETE', 'PUT', 'PATCH']:
+                security_level = SecurityLevel.AUTH_REQUIRED
+                confidence = 0.4
+                reasoning = f"Destructive HTTP method: {method}"
+            elif any(keyword in f"{path} {name}" for keyword in ['public', 'health', 'status', 'info']):
+                security_level = SecurityLevel.PUBLIC
+                confidence = 0.5
+                reasoning = "Public endpoint patterns detected"
+            else:
+                security_level = SecurityLevel.AUTH_REQUIRED
+                confidence = 0.3
+                reasoning = "Default classification for safety"
+            
+            endpoint_key = f"{endpoint_data.get('method', 'GET')}:{endpoint_data.get('path', '')}"
+            
+            results[endpoint_key] = SecurityAnalysis(
+                security_level=security_level,
+                confidence_score=confidence,
+                detected_decorators=[],
+                security_features=[f"Basic pattern analysis for {method} {path}"],
+                reasoning=reasoning,
+                file_path=endpoint_data.get('file', ''),
+                line_number=endpoint_data.get('line')
+            )
+        
+        return results

@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import axios from 'axios'
 import { toast } from 'react-toastify'
 import './APIPlayground.css'
 
-const APIPlayground = ({ endpoints, isOwner = false, projectId }) => {
+const APIPlayground = ({ endpoints, isOwner = false, projectId, liveBaseUrl = '', setErrorContext, setEndpointContext }) => {
   const [selectedEndpoint, setSelectedEndpoint] = useState(null)
   const [requestBody, setRequestBody] = useState('{}')
   const [response, setResponse] = useState(null)
@@ -18,6 +18,9 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId }) => {
   const [translationError, setTranslationError] = useState('')
   const [translatedResponse, setTranslatedResponse] = useState(null)
   const [executingTranslated, setExecutingTranslated] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [visibleEndpoints, setVisibleEndpoints] = useState(20)
+  const [liveBaseUrlOverride, setLiveBaseUrlOverride] = useState('')
 
   const frameworks = [
     { id: 'express', name: 'Express.js', icon: '🟢', description: 'Node.js web framework' },
@@ -26,6 +29,58 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId }) => {
     { id: 'django', name: 'Django REST', icon: '🎸', description: 'Python web framework' },
     { id: 'spring', name: 'Spring Boot', icon: '☕', description: 'Java enterprise framework' }
   ]
+
+  // Helper function to resolve path parameters in URL
+  const resolvePathParameters = (url, pathParameters, customValues = {}) => {
+    if (!pathParameters || pathParameters.length === 0) {
+      return url
+    }
+
+    let resolvedUrl = url
+
+    pathParameters.forEach((param, index) => {
+      // Handle both object and string parameters
+      const paramName = typeof param === 'object' ? param.name || `param_${index}` : param;
+      const value = customValues[paramName] || getDefaultParamValue(paramName)
+      // Replace :param, {param}, and <param> formats
+      resolvedUrl = resolvedUrl.replace(new RegExp(`:${paramName}\\b`, 'g'), value)
+      resolvedUrl = resolvedUrl.replace(new RegExp(`\\{${paramName}\\}`, 'g'), value)
+      resolvedUrl = resolvedUrl.replace(new RegExp(`<${paramName}>`, 'g'), value)
+    })
+
+    return resolvedUrl
+  }
+
+  // Memoized filtered endpoints for performance
+  const filteredEndpoints = useMemo(() => {
+    if (!endpoints) return []
+    
+    let filtered = endpoints
+    
+    // Apply search filter
+    if (searchTerm.trim()) {
+      const search = searchTerm.toLowerCase()
+      filtered = endpoints.filter(endpoint => 
+        endpoint.name.toLowerCase().includes(search) ||
+        endpoint.method.toLowerCase().includes(search) ||
+        endpoint.url.toLowerCase().includes(search) ||
+        (endpoint.description && endpoint.description.toLowerCase().includes(search))
+      )
+    }
+    
+    return filtered
+  }, [endpoints, searchTerm])
+
+  // Load more endpoints when scrolling
+  const loadMoreEndpoints = useCallback(() => {
+    setVisibleEndpoints(prev => Math.min(prev + 20, filteredEndpoints.length))
+  }, [filteredEndpoints.length])
+
+  // Reset visible endpoints when search changes
+  const handleSearchChange = useCallback((e) => {
+    setSearchTerm(e.target.value)
+    setVisibleEndpoints(20)
+  }, [])
 
   // Get default sample values for path parameters
   const getDefaultParamValue = (param) => {
@@ -47,40 +102,35 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId }) => {
     return sampleValues[param] || '123'
   }
 
-  // Helper function to resolve path parameters in URL
-  const resolvePathParameters = (url, pathParameters, customValues = {}) => {
-    if (!pathParameters || pathParameters.length === 0) {
-      return url
-    }
-
-    let resolvedUrl = url
-
-    pathParameters.forEach(param => {
-      const value = customValues[param] || getDefaultParamValue(param)
-      // Replace both :param and {param} formats
-      resolvedUrl = resolvedUrl.replace(new RegExp(`:${param}\\b`, 'g'), value)
-      resolvedUrl = resolvedUrl.replace(new RegExp(`\\{${param}\\}`, 'g'), value)
-    })
-
-    return resolvedUrl
-  }
-
-  const handleEndpointSelect = (endpoint) => {
+  const handleEndpointSelect = useCallback((endpoint) => {
     setSelectedEndpoint(endpoint)
-    setRequestBody(JSON.stringify(endpoint.sample_body, null, 2))
+    setRequestBody(JSON.stringify(endpoint.sample_body || {}, null, 2))
     setResponse(null)
+
+    if (setEndpointContext) {
+      setEndpointContext({
+        method: endpoint.method,
+        path: endpoint.url,
+        parameters: endpoint.path_parameters || [],
+        expected_responses: endpoint.expected_responses || [],
+        sample_body: endpoint.sample_body || null,
+        description: endpoint.description || '',
+      })
+    }
     
     // Initialize path parameter values with defaults
     if (endpoint.path_parameters && endpoint.path_parameters.length > 0) {
       const initialValues = {}
-      endpoint.path_parameters.forEach(param => {
-        initialValues[param] = getDefaultParamValue(param)
+      endpoint.path_parameters.forEach((param, index) => {
+        // Handle both object and string parameters
+        const paramName = typeof param === 'object' ? param.name || `param_${index}` : param;
+        initialValues[paramName] = getDefaultParamValue(paramName)
       })
       setPathParamValues(initialValues)
     } else {
       setPathParamValues({})
     }
-  }
+  }, [setEndpointContext])
 
   const handlePathParamChange = (param, value) => {
     setPathParamValues(prev => ({
@@ -151,6 +201,7 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId }) => {
     if (!selectedEndpoint || !selectedFramework) return
 
     setExecutingTranslated(true)
+    setResponse(null) // Clear regular response when doing translated execution
     try {
       const customBody = JSON.parse(requestBody)
       
@@ -181,28 +232,107 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId }) => {
     if (!selectedEndpoint) return
 
     setLoading(true)
+    setTranslatedResponse(null)
     try {
       const customBody = JSON.parse(requestBody)
-      const url = liveMode ? '/api/execute/?mode=live' : '/api/execute/'
-      
-      const result = await axios.post(url, {
-        endpoint_id: selectedEndpoint.id,
-        custom_body: customBody,
-        custom_path_params: pathParamValues,  // Send custom path parameter values
-      })
-      setResponse(result.data)
-      
+
       if (liveMode) {
-        toast.success('Live API test completed')
+        // LIVE MODE: call the real API URL directly (like Postman)
+        let resolvedUrl = resolvePathParameters(
+          selectedEndpoint.url,
+          selectedEndpoint.path_parameters,
+          pathParamValues
+        )
+
+        // Use AI-detected base URL from project, or manual override if set
+        const effectiveBase = liveBaseUrlOverride.trim() || liveBaseUrl
+        if (effectiveBase) {
+          try {
+            const base = new URL(effectiveBase)
+            const endpoint = new URL(resolvedUrl)
+            resolvedUrl = base.origin + endpoint.pathname + endpoint.search
+          } catch {
+            // invalid URL, use as-is
+          }
+        }
+
+        const fetchOptions = {
+          method: selectedEndpoint.method,
+          headers: { 'Content-Type': 'application/json' },
+        }
+        if (!['GET', 'HEAD'].includes(selectedEndpoint.method)) {
+          fetchOptions.body = JSON.stringify(customBody)
+        }
+
+        let statusCode = 0
+        let responseData = null
+        let responseError = null
+
+        try {
+          const res = await fetch(resolvedUrl, fetchOptions)
+          statusCode = res.status
+          const rawText = await res.text()
+          try {
+            responseData = JSON.parse(rawText)
+          } catch {
+            responseData = rawText
+          }
+        } catch (err) {
+          statusCode = 0
+          responseError = `Network error: ${err.message}. Make sure your API server is running and CORS is enabled.`
+        }
+
+        setResponse({
+          mode: 'live',
+          status_code: statusCode,
+          data: responseData,
+          error: responseError,
+        })
+
+        if (!responseError) {
+          toast.success('Live API test completed')
+        } else {
+          toast.error('Live request failed')
+          if (setErrorContext) {
+            setErrorContext({
+              method: selectedEndpoint.method,
+              path: selectedEndpoint.url,
+              status_code: statusCode,
+              error_message: responseError,
+            })
+          }
+        }
+      } else {
+        // SANDBOX MODE: go through our backend proxy
+        const token = localStorage.getItem('token')
+        const headers = token ? { 'Authorization': `Token ${token}` } : {}
+
+        const result = await axios.post('/api/execute/', {
+          endpoint_id: selectedEndpoint.id,
+          custom_body: customBody,
+          custom_path_params: pathParamValues,
+        }, { headers })
+
+        setResponse(result.data)
       }
     } catch (error) {
+      const statusCode = error.response?.status
+      const backendError = error.response?.data?.error || error.response?.data?.detail || error.message
       toast.error('Failed to execute request')
       setResponse({
         mode: 'error',
-        status_code: 500,
+        status_code: statusCode || 500,
         data: null,
-        error: error.message,
+        error: backendError,
       })
+      if (setErrorContext) {
+        setErrorContext({
+          method: selectedEndpoint.method,
+          path: selectedEndpoint.url,
+          status_code: statusCode || 500,
+          error_message: backendError,
+        })
+      }
     } finally {
       setLoading(false)
     }
@@ -225,15 +355,58 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId }) => {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <h3 style={{ 
-          fontSize: '1.875rem', 
-          fontWeight: '800',
-          letterSpacing: '-0.02em',
-          margin: 0
+      {/* Loading State */}
+      {!endpoints ? (
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: '400px',
+          textAlign: 'center'
         }}>
-          API Playground
-        </h3>
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+            style={{
+              width: '40px',
+              height: '40px',
+              border: '3px solid var(--border-primary)',
+              borderTopColor: 'var(--accent-primary)',
+              borderRadius: '50%',
+              marginBottom: '1rem'
+            }}
+          />
+          <p style={{ color: 'var(--text-secondary)' }}>Loading API Playground...</p>
+        </div>
+      ) : endpoints.length === 0 ? (
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: '400px',
+          textAlign: 'center'
+        }}>
+          <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>📭</div>
+          <h4 style={{ fontSize: '1.25rem', fontWeight: '700', marginBottom: '0.5rem' }}>
+            No Endpoints Available
+          </h4>
+          <p style={{ color: 'var(--text-secondary)' }}>
+            Add some endpoints to start testing your API
+          </p>
+        </div>
+      ) : (
+        <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+            <h3 style={{ 
+              fontSize: '1.875rem', 
+              fontWeight: '800',
+              letterSpacing: '-0.02em',
+              margin: 0
+            }}>
+              API Playground
+            </h3>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           {/* Tab Navigation */}
@@ -336,66 +509,214 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId }) => {
           borderRadius: 'var(--radius-md)',
           marginBottom: '1.5rem',
           display: 'flex',
-          alignItems: 'center',
-          gap: '0.75rem'
+          alignItems: 'flex-start',
+          gap: '0.75rem',
+          flexWrap: 'wrap'
         }}>
           <span style={{ fontSize: '1.5rem' }}>⚠️</span>
-          <div>
-            <p style={{ margin: 0, fontWeight: '600', color: '#ef4444', fontSize: '0.9375rem' }}>
+          <div style={{ flex: 1, minWidth: '200px' }}>
+            <p style={{ margin: '0 0 0.25rem 0', fontWeight: '600', color: '#ef4444', fontSize: '0.9375rem' }}>
               Live Mode Active
             </p>
-            <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-              Requests will call your real external API. Use with caution.
+            <p style={{ margin: '0 0 0.5rem 0', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+              Hitting real API at: <code style={{ fontFamily: 'var(--font-mono)', color: '#10b981' }}>
+                {liveBaseUrlOverride.trim() || liveBaseUrl || '(using endpoint URLs as-is)'}
+              </code>
             </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <label style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
+                Override base URL:
+              </label>
+              <input
+                type="text"
+                placeholder={liveBaseUrl || 'e.g. http://localhost:8000'}
+                value={liveBaseUrlOverride}
+                onChange={e => setLiveBaseUrlOverride(e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: '0.3rem 0.5rem',
+                  fontSize: '0.8125rem',
+                  fontFamily: 'var(--font-mono)',
+                  background: 'var(--bg-primary)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: 'var(--radius-md)',
+                  color: 'var(--text-primary)',
+                  outline: 'none',
+                }}
+              />
+            </div>
           </div>
         </div>
       )}
 
       <div className="playground-grid">
         <div className="endpoints-sidebar">
-          <h4 style={{ 
-            fontSize: '0.875rem', 
-            fontWeight: '700', 
-            color: 'var(--text-secondary)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            marginBottom: '1rem'
-          }}>
-            Endpoints
-          </h4>
-          <div className="endpoints-list">
-            {endpoints.map((endpoint) => (
-              <button
-                key={endpoint.id}
-                onClick={() => handleEndpointSelect(endpoint)}
-                className={`endpoint-item ${selectedEndpoint?.id === endpoint.id ? 'active' : ''}`}
-              >
-                <div className="endpoint-header">
-                  <span
-                    style={{ 
-                      backgroundColor: getMethodColor(endpoint.method),
-                      color: 'white',
-                      padding: '0.25rem 0.5rem',
-                      borderRadius: '0.25rem',
-                      fontSize: '0.75rem',
-                      fontWeight: '700',
-                      fontFamily: 'var(--font-mono)'
-                    }}
+          <div style={{ marginBottom: '1rem' }}>
+            <h4 style={{ 
+              fontSize: '0.875rem', 
+              fontWeight: '700', 
+              color: 'var(--text-secondary)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              marginBottom: '0.75rem'
+            }}>
+              Endpoints ({filteredEndpoints.length})
+            </h4>
+            
+            {/* Search Input */}
+            {endpoints && endpoints.length > 10 && (
+              <div style={{ marginBottom: '1rem' }}>
+                <input
+                  type="text"
+                  placeholder="Search endpoints..."
+                  value={searchTerm}
+                  onChange={handleSearchChange}
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem 0.75rem',
+                    fontSize: '0.875rem',
+                    background: 'var(--bg-primary)',
+                    border: '1px solid var(--border-secondary)',
+                    borderRadius: 'var(--radius-md)',
+                    color: 'var(--text-primary)',
+                    outline: 'none',
+                    transition: 'border-color 0.2s'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                  onBlur={(e) => e.target.style.borderColor = 'var(--border-secondary)'}
+                />
+              </div>
+            )}
+          </div>
+          
+          <div className="endpoints-list" style={{ maxHeight: '600px', overflowY: 'auto', paddingBottom: '1rem' }}>
+            {/* Debug Info */}
+            <div style={{
+              padding: '0.5rem',
+              background: 'rgba(59, 130, 246, 0.1)',
+              border: '1px solid rgba(59, 130, 246, 0.3)',
+              borderRadius: '4px',
+              fontSize: '0.75rem',
+              color: 'var(--text-secondary)',
+              marginBottom: '0.5rem'
+            }}>
+              Showing {Math.min(visibleEndpoints, filteredEndpoints.length)} of {filteredEndpoints.length} endpoints
+            </div>
+            
+            {filteredEndpoints.length === 0 ? (
+              <div style={{
+                padding: '2rem',
+                textAlign: 'center',
+                color: 'var(--text-tertiary)',
+                fontSize: '0.875rem'
+              }}>
+                {searchTerm ? 'No endpoints match your search' : 'No endpoints available'}
+              </div>
+            ) : (
+              <>
+                {filteredEndpoints.slice(0, visibleEndpoints).map((endpoint) => (
+                  <button
+                    key={endpoint.id}
+                    onClick={() => handleEndpointSelect(endpoint)}
+                    className={`endpoint-item ${selectedEndpoint?.id === endpoint.id ? 'active' : ''}`}
                   >
-                    {endpoint.method}
-                  </span>
-                  <span className="endpoint-name">{endpoint.name}</span>
-                </div>
-                <p className="endpoint-url" style={{ 
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '0.75rem',
-                  color: 'var(--text-tertiary)',
-                  marginTop: '0.5rem'
-                }}>
-                  {resolvePathParameters(endpoint.url, endpoint.path_parameters)}
-                </p>
-              </button>
-            ))}
+                    <div className="endpoint-header">
+                      <span
+                        style={{ 
+                          backgroundColor: getMethodColor(endpoint.method),
+                          color: 'white',
+                          padding: '0.25rem 0.5rem',
+                          borderRadius: '0.25rem',
+                          fontSize: '0.75rem',
+                          fontWeight: '700',
+                          fontFamily: 'var(--font-mono)'
+                        }}
+                      >
+                        {endpoint.method}
+                      </span>
+                      <span className="endpoint-name">{endpoint.name}</span>
+                    </div>
+                    <p className="endpoint-url" style={{ 
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.75rem',
+                      color: 'var(--text-tertiary)',
+                      marginTop: '0.5rem'
+                    }}>
+                      {resolvePathParameters(endpoint.url, endpoint.path_parameters)}
+                    </p>
+                  </button>
+                ))}
+                
+                {/* Load More Button */}
+                {visibleEndpoints < filteredEndpoints.length && (
+                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+                    <button
+                      onClick={loadMoreEndpoints}
+                      style={{
+                        flex: 1,
+                        padding: '1rem',
+                        background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+                        border: 'none',
+                        borderRadius: 'var(--radius-md)',
+                        color: 'white',
+                        fontSize: '0.875rem',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        boxShadow: '0 2px 4px rgba(59, 130, 246, 0.3)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.5rem'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.transform = 'translateY(-1px)'
+                        e.target.style.boxShadow = '0 4px 8px rgba(59, 130, 246, 0.4)'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.transform = 'translateY(0)'
+                        e.target.style.boxShadow = '0 2px 4px rgba(59, 130, 246, 0.3)'
+                      }}
+                    >
+                      <span>📄</span>
+                      Load More +20
+                    </button>
+                    
+                    <button
+                      onClick={() => setVisibleEndpoints(filteredEndpoints.length)}
+                      style={{
+                        padding: '1rem',
+                        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                        border: 'none',
+                        borderRadius: 'var(--radius-md)',
+                        color: 'white',
+                        fontSize: '0.875rem',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        boxShadow: '0 2px 4px rgba(16, 185, 129, 0.3)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.25rem'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.transform = 'translateY(-1px)'
+                        e.target.style.boxShadow = '0 4px 8px rgba(16, 185, 129, 0.4)'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.transform = 'translateY(0)'
+                        e.target.style.boxShadow = '0 2px 4px rgba(16, 185, 129, 0.3)'
+                      }}
+                      title="Show all endpoints"
+                    >
+                      <span>📋</span>
+                      All
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
 
@@ -427,7 +748,8 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId }) => {
                     {selectedEndpoint.name}
                   </h4>
                 </div>
-                <p style={{
+                <p 
+                  style={{
                   fontFamily: 'var(--font-mono)',
                   fontSize: '0.875rem',
                   color: 'var(--text-secondary)',
@@ -458,23 +780,28 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId }) => {
                     }}>
                       📌 Path Parameters
                     </div>
-                    {selectedEndpoint.path_parameters.map(param => (
-                      <div key={param} style={{ marginBottom: '0.75rem' }}>
-                        <label style={{ 
-                          display: 'block',
-                          fontSize: '0.8125rem',
-                          fontWeight: '600',
-                          color: 'var(--text-secondary)',
-                          marginBottom: '0.375rem',
-                          fontFamily: 'var(--font-mono)'
-                        }}>
-                          {param}
-                        </label>
-                        <input
-                          type="text"
-                          value={pathParamValues[param] || ''}
-                          onChange={(e) => handlePathParamChange(param, e.target.value)}
-                          placeholder={`Enter ${param}`}
+                    {selectedEndpoint.path_parameters.map((param, index) => {
+                      // Handle both object and string parameters
+                      const paramName = typeof param === 'object' ? param.name || `param_${index}` : param;
+                      const paramKey = typeof param === 'object' ? param.name || index : param;
+                      
+                      return (
+                        <div key={paramKey} style={{ marginBottom: '0.75rem' }}>
+                          <label style={{ 
+                            display: 'block',
+                            fontSize: '0.8125rem',
+                            fontWeight: '600',
+                            color: 'var(--text-secondary)',
+                            marginBottom: '0.375rem',
+                            fontFamily: 'var(--font-mono)'
+                          }}>
+                            {paramName}
+                          </label>
+                          <input
+                            type="text"
+                            value={pathParamValues[paramName] || ''}
+                            onChange={(e) => handlePathParamChange(paramName, e.target.value)}
+                            placeholder={`Enter ${paramName}`}
                           style={{
                             width: '100%',
                             padding: '0.5rem 0.75rem',
@@ -491,7 +818,8 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId }) => {
                           onBlur={(e) => e.target.style.borderColor = 'var(--border-secondary)'}
                         />
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
                 {selectedEndpoint.description && (
@@ -539,7 +867,8 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId }) => {
                   background: liveMode ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' : undefined
                 }}
               >
-                {loading ? 'Executing...' : (liveMode ? '▶ Test Live API' : '▶ Run Request')}
+                {loading ? 'Executing...' : 
+                 liveMode ? '▶ Test Live API' : '▶ Run Request'}
               </button>
 
               {response && (
@@ -554,14 +883,15 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId }) => {
                         borderRadius: 'var(--radius-md)',
                         fontSize: '0.875rem',
                         fontWeight: '700',
-                        background: response.mode === 'sandbox' 
+                        background: response.mode === 'sandbox'
                           ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' 
                           : response.mode === 'live'
                           ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'
                           : 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
                         color: 'white'
                       }}>
-                        {response.mode === 'sandbox' ? '🧪 Sandbox' : response.mode === 'live' ? '🔴 Live' : '⚠️ Error'}
+                        {response.mode === 'sandbox' ? '🧪 Sandbox' : 
+                         response.mode === 'live' ? '🔴 Live' : '⚠️ Error'}
                       </span>
                     )}
                   </div>
@@ -637,6 +967,38 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId }) => {
                     Convert your {endpoints?.length || 0} detected endpoints to any framework
                   </p>
                 </div>
+              </div>
+
+              {/* Instructions */}
+              <div style={{
+                padding: '1rem',
+                background: 'rgba(59, 130, 246, 0.1)',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                borderRadius: 'var(--radius-md)',
+                marginBottom: '1.5rem'
+              }}>
+                <div style={{ 
+                  fontSize: '0.875rem', 
+                  fontWeight: '700', 
+                  color: 'var(--text-primary)',
+                  marginBottom: '0.5rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}>
+                  💡 How to use
+                </div>
+                <ol style={{ 
+                  fontSize: '0.8125rem', 
+                  color: 'var(--text-secondary)', 
+                  margin: 0,
+                  paddingLeft: '1.25rem'
+                }}>
+                  <li>Select a target framework below</li>
+                  <li>Click "Generate Code" to translate all endpoints</li>
+                  <li>Select an endpoint from the sidebar to test it</li>
+                  <li>Click "Test as [Framework]" to test the selected endpoint</li>
+                </ol>
               </div>
 
               {/* Framework Selection */}
@@ -729,24 +1091,26 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId }) => {
                   )}
                 </motion.button>
 
-                {/* Test Translated Button */}
-                {selectedEndpoint && selectedFramework && (
+                {/* Test Translated Button - Always show when framework is selected */}
+                {selectedFramework && (
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={handleExecuteTranslated}
-                    disabled={executingTranslated || !selectedFramework}
+                    disabled={executingTranslated || !selectedFramework || !selectedEndpoint}
                     style={{
                       flex: 1,
                       padding: '1rem',
-                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                      background: !selectedEndpoint 
+                        ? 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)'
+                        : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                       color: 'white',
                       border: 'none',
                       borderRadius: 'var(--radius-md)',
                       fontSize: '1rem',
                       fontWeight: 600,
-                      cursor: executingTranslated || !selectedFramework ? 'not-allowed' : 'pointer',
-                      opacity: executingTranslated || !selectedFramework ? 0.6 : 1
+                      cursor: executingTranslated || !selectedFramework || !selectedEndpoint ? 'not-allowed' : 'pointer',
+                      opacity: executingTranslated || !selectedEndpoint ? 0.6 : 1
                     }}
                   >
                     {executingTranslated ? (
@@ -764,6 +1128,10 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId }) => {
                         />
                         Testing...
                       </span>
+                    ) : !selectedEndpoint ? (
+                      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                        🎯 Select endpoint to test
+                      </span>
                     ) : (
                       <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
                         🧪 Test as {frameworks.find(f => f.id === selectedFramework)?.name}
@@ -774,33 +1142,53 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId }) => {
               </div>
 
               {/* Selected Endpoint Info */}
-              {selectedEndpoint && selectedFramework && (
+              {selectedFramework && (
                 <div style={{
                   padding: '1rem',
-                  background: 'rgba(59, 130, 246, 0.1)',
-                  border: '1px solid rgba(59, 130, 246, 0.3)',
+                  background: selectedEndpoint 
+                    ? 'rgba(59, 130, 246, 0.1)' 
+                    : 'rgba(156, 163, 175, 0.1)',
+                  border: selectedEndpoint 
+                    ? '1px solid rgba(59, 130, 246, 0.3)' 
+                    : '1px solid rgba(156, 163, 175, 0.3)',
                   borderRadius: 'var(--radius-md)',
                   marginBottom: '1.5rem'
                 }}>
-                  <div style={{ 
-                    fontSize: '0.875rem', 
-                    fontWeight: '700', 
-                    color: 'var(--text-primary)',
-                    marginBottom: '0.5rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem'
-                  }}>
-                    🎯 Testing: {selectedEndpoint.name} → {frameworks.find(f => f.id === selectedFramework)?.name}
-                  </div>
-                  <p style={{ 
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '0.75rem',
-                    color: 'var(--text-secondary)',
-                    margin: 0
-                  }}>
-                    {selectedEndpoint.method} {resolvePathParameters(selectedEndpoint.url, selectedEndpoint.path_parameters, pathParamValues)}
-                  </p>
+                  {selectedEndpoint ? (
+                    <>
+                      <div style={{ 
+                        fontSize: '0.875rem', 
+                        fontWeight: '700', 
+                        color: 'var(--text-primary)',
+                        marginBottom: '0.5rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem'
+                      }}>
+                        🎯 Testing: {selectedEndpoint.name} → {frameworks.find(f => f.id === selectedFramework)?.name}
+                      </div>
+                      <p 
+                        style={{ 
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '0.75rem',
+                        color: 'var(--text-secondary)',
+                        margin: 0
+                      }}>
+                        {selectedEndpoint.method} {resolvePathParameters(selectedEndpoint.url, selectedEndpoint.path_parameters, pathParamValues)}
+                      </p>
+                    </>
+                  ) : (
+                    <div style={{ 
+                      fontSize: '0.875rem', 
+                      fontWeight: '600', 
+                      color: 'var(--text-secondary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem'
+                    }}>
+                      👈 Select an endpoint from the sidebar to test it as {frameworks.find(f => f.id === selectedFramework)?.name}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1003,6 +1391,8 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId }) => {
           ) : null}
         </div>
       </div>
+        </>
+      )}
     </motion.div>
   )
 }

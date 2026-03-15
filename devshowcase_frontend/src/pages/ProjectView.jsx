@@ -9,7 +9,7 @@ import { AuthContext } from '../context/AuthContext'
 import AnimatedPage from '../components/AnimatedPage'
 import './ProjectView.css'
 
-const ProjectView = () => {
+const ProjectView = ({ setErrorContext, setEndpointContext }) => {
   const { slug } = useParams()
   const { user } = useContext(AuthContext)
   const [project, setProject] = useState(null)
@@ -248,7 +248,7 @@ const ProjectView = () => {
 
               {/* Playground Tab */}
               {activeTab === 'playground' && (
-                <APIPlayground endpoints={project.endpoints} isOwner={isOwner} projectId={project.id} />
+                <APIPlayground endpoints={project.endpoints} isOwner={isOwner} projectId={project.id} liveBaseUrl={project.live_base_url || ''} setErrorContext={setErrorContext} setEndpointContext={setEndpointContext} />
               )}
 
               {/* Timeline Tab */}

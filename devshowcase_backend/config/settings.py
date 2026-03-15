@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     'projects',
     'execution',
     'sandbox',
+    'chat',
 ]
 
 MIDDLEWARE = [

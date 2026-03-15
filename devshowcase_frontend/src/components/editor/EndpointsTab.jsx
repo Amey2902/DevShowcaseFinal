@@ -12,6 +12,37 @@ const methodColor = {
   DELETE: '#ef4444',
 }
 
+const securityLevelConfig = {
+  public: {
+    color: '#10b981',
+    bgColor: 'rgba(16, 185, 129, 0.1)',
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+    icon: '🌐',
+    label: 'Public'
+  },
+  auth_required: {
+    color: '#f59e0b',
+    bgColor: 'rgba(245, 158, 11, 0.1)',
+    borderColor: 'rgba(245, 158, 11, 0.3)',
+    icon: '🔐',
+    label: 'Auth Required'
+  },
+  admin_functions: {
+    color: '#ef4444',
+    bgColor: 'rgba(239, 68, 68, 0.1)',
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    icon: '👑',
+    label: 'Admin Only'
+  },
+  sensitive_data: {
+    color: '#dc2626',
+    bgColor: 'rgba(220, 38, 38, 0.1)',
+    borderColor: 'rgba(220, 38, 38, 0.3)',
+    icon: '🔒',
+    label: 'Sensitive Data'
+  }
+}
+
 const EndpointsTab = ({ project, onUpdate }) => {
   const [formData, setFormData] = useState({
     name: '', method: 'GET', url: '', headers: '{}', sample_body: '{}', description: '',
@@ -60,6 +91,27 @@ const EndpointsTab = ({ project, onUpdate }) => {
     } catch {
       toast.error('Failed to delete endpoint')
     }
+  }
+
+  const handleSecurityOverride = async (endpointId, newSecurityLevel) => {
+    try {
+      await axios.patch(`/api/endpoints/${endpointId}/`, {
+        user_security_override: newSecurityLevel
+      })
+      toast.success('Security level updated')
+      onUpdate()
+    } catch (error) {
+      toast.error('Failed to update security level')
+    }
+  }
+
+  const getEffectiveSecurityLevel = (endpoint) => {
+    // User override takes precedence, then AST analysis, then fallback
+    return endpoint.user_security_override || endpoint.ast_security_level || 'auth_required'
+  }
+
+  const getSecurityConfig = (securityLevel) => {
+    return securityLevelConfig[securityLevel] || securityLevelConfig.auth_required
   }
 
   return (
@@ -132,6 +184,61 @@ const EndpointsTab = ({ project, onUpdate }) => {
                   {endpoint.method}
                 </span>
                 <span style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>{endpoint.name}</span>
+                
+                {/* Security Level Badge */}
+                {(() => {
+                  const effectiveLevel = getEffectiveSecurityLevel(endpoint)
+                  const secConfig = getSecurityConfig(effectiveLevel)
+                  return (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{
+                        padding: '0.25rem 0.625rem',
+                        background: secConfig.bgColor,
+                        color: secConfig.color,
+                        border: `1px solid ${secConfig.borderColor}`,
+                        borderRadius: '6px',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.25rem'
+                      }}>
+                        {secConfig.icon} {secConfig.label}
+                        {endpoint.ast_confidence_score && (
+                          <span style={{ 
+                            fontSize: '0.65rem', 
+                            opacity: 0.8,
+                            marginLeft: '0.25rem'
+                          }}>
+                            ({Math.round(endpoint.ast_confidence_score * 100)}%)
+                          </span>
+                        )}
+                      </span>
+                      
+                      {/* Security Override Dropdown */}
+                      <select
+                        value={getEffectiveSecurityLevel(endpoint)}
+                        onChange={(e) => handleSecurityOverride(endpoint.id, e.target.value)}
+                        style={{
+                          padding: '0.2rem 0.4rem',
+                          fontSize: '0.7rem',
+                          borderRadius: '4px',
+                          border: '1px solid var(--border-primary)',
+                          background: 'var(--bg-secondary)',
+                          color: 'var(--text-primary)',
+                          cursor: 'pointer'
+                        }}
+                        title="Override security classification"
+                      >
+                        <option value="public">🌐 Public</option>
+                        <option value="auth_required">🔐 Auth Required</option>
+                        <option value="admin_functions">👑 Admin Only</option>
+                        <option value="sensitive_data">🔒 Sensitive Data</option>
+                      </select>
+                    </div>
+                  )
+                })()}
+                
                 {endpoint.auth_required && (
                   <span style={{
                     padding: '0.25rem 0.625rem',
@@ -200,6 +307,90 @@ const EndpointsTab = ({ project, onUpdate }) => {
                       )}
                     </div>
                   )}
+                  
+                  {/* AST Security Analysis */}
+                  {endpoint.ast_security_level && (
+                    <div style={{
+                      padding: '0.75rem',
+                      background: 'rgba(16, 185, 129, 0.05)',
+                      border: '1px solid rgba(16, 185, 129, 0.15)',
+                      borderRadius: '6px',
+                      marginTop: '0.5rem'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                        <span>🧠</span>
+                        <strong style={{ color: 'var(--accent-cyan)' }}>AST Security Analysis:</strong>
+                        {endpoint.user_security_override && (
+                          <span style={{
+                            padding: '0.15rem 0.5rem',
+                            background: 'rgba(59, 130, 246, 0.2)',
+                            color: 'var(--accent-primary)',
+                            borderRadius: '4px',
+                            fontSize: '0.7rem',
+                            fontWeight: 700
+                          }}>
+                            User Override Active
+                          </span>
+                        )}
+                      </div>
+                      
+                      {endpoint.ast_reasoning && (
+                        <p style={{ 
+                          color: 'var(--text-secondary)', 
+                          fontSize: '0.8rem', 
+                          marginBottom: '0.5rem',
+                          fontStyle: 'italic'
+                        }}>
+                          {endpoint.ast_reasoning}
+                        </p>
+                      )}
+                      
+                      {endpoint.detected_decorators?.length > 0 && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                          <span>🏷️</span>
+                          <strong style={{ color: 'var(--accent-cyan)' }}>Decorators:</strong>
+                          {endpoint.detected_decorators.map((decorator, i) => (
+                            <span key={i} style={{ 
+                              padding: '0.15rem 0.5rem', 
+                              background: 'rgba(16, 185, 129, 0.2)', 
+                              color: 'var(--success)', 
+                              borderRadius: '4px', 
+                              fontSize: '0.75rem', 
+                              fontWeight: 700,
+                              fontFamily: 'var(--font-mono)'
+                            }}>
+                              {decorator}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {endpoint.security_features?.length > 0 && (
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <span>🔍</span>
+                          <div>
+                            <strong style={{ color: 'var(--accent-cyan)' }}>Security Features:</strong>
+                            <ul style={{ 
+                              margin: '0.25rem 0 0 1rem', 
+                              padding: 0, 
+                              fontSize: '0.75rem',
+                              color: 'var(--text-secondary)'
+                            }}>
+                              {endpoint.security_features.slice(0, 3).map((feature, i) => (
+                                <li key={i} style={{ marginBottom: '0.15rem' }}>{feature}</li>
+                              ))}
+                              {endpoint.security_features.length > 3 && (
+                                <li style={{ fontStyle: 'italic', opacity: 0.7 }}>
+                                  ... and {endpoint.security_features.length - 3} more
+                                </li>
+                              )}
+                            </ul>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
                   {endpoint.path_parameters?.length > 0 && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                       <span>🔗</span>
