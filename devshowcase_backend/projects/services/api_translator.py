@@ -687,6 +687,10 @@ public class {class_name} {{
     
     def _python_type_mapping(self, field_type):
         """Map field types to Python types."""
+        # Normalize: if field_type is a list, use the first element
+        if isinstance(field_type, list):
+            field_type = field_type[0] if field_type else 'string'
+        field_type = str(field_type).lower()
         mapping = {
             'string': 'str',
             'integer': 'int', 
@@ -698,6 +702,9 @@ public class {class_name} {{
     
     def _django_field_mapping(self, field_type):
         """Map field types to Django serializer fields."""
+        if isinstance(field_type, list):
+            field_type = field_type[0] if field_type else 'string'
+        field_type = str(field_type).lower()
         mapping = {
             'string': 'CharField()',
             'integer': 'IntegerField()',
@@ -709,6 +716,9 @@ public class {class_name} {{
     
     def _java_type_mapping(self, field_type):
         """Map field types to Java types."""
+        if isinstance(field_type, list):
+            field_type = field_type[0] if field_type else 'string'
+        field_type = str(field_type).lower()
         mapping = {
             'string': 'String',
             'integer': 'Integer',
