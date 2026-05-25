@@ -1,4 +1,23 @@
+import re
 from projects.models import Endpoint
+
+
+def normalize_path_params(path):
+    """
+    Normalize path parameter formats to {param} style.
+    Converts:
+      <int:pk>  → {pk}
+      <str:username> → {username}
+      <pk>      → {pk}
+      :id       → {id}
+    """
+    # Django typed: <int:pk>, <str:name>, <slug:s>, <uuid:u>, <path:p>
+    path = re.sub(r'<(?:int|str|slug|uuid|path):(\w+)>', r'{\1}', path)
+    # Django/Flask untyped: <pk>
+    path = re.sub(r'<(\w+)>', r'{\1}', path)
+    # Express.js: :id  (but not ://  in http://)
+    path = re.sub(r'(?<!:):(\w+)', r'{\1}', path)
+    return path
 
 
 class EndpointExtractor:
@@ -53,6 +72,8 @@ class EndpointExtractor:
                         # Extract data with defaults
                         method = endpoint_data.get('method', 'GET').upper()
                         path = endpoint_data.get('path', '')
+                        # Normalize path parameter formats to {param} style
+                        path = normalize_path_params(path)
                         name = endpoint_data.get('name', f"{method} {path}")
 
                         # Handle both full URLs and relative paths

@@ -84,7 +84,28 @@ def process_upload_pipeline(upload_id):
                     architecture_nodes_created = len(saved_nodes)
                     
                     upload.architecture_nodes_created = architecture_nodes_created
-                    upload.architecture_analysis_data = arch_analysis
+                    
+                    # Convert ArchitecturalComponent objects to dicts for JSON serialization
+                    serializable_analysis = {
+                        'project_type': arch_analysis.get('project_type'),
+                        'components': [
+                            {
+                                'name': comp.name,
+                                'component_type': comp.component_type.value if hasattr(comp.component_type, 'value') else str(comp.component_type),
+                                'technology': comp.technology,
+                                'description': comp.description,
+                                'confidence_score': comp.confidence_score,
+                                'source_files': comp.source_files,
+                                'dependencies': comp.dependencies,
+                                'suggested_position': comp.suggested_position
+                            } for comp in components
+                        ],
+                        'frameworks': arch_analysis.get('frameworks', {}),
+                        'dependencies': arch_analysis.get('dependencies', []),
+                        'connections': arch_analysis.get('connections', [])
+                    }
+                    
+                    upload.architecture_analysis_data = serializable_analysis
                     upload.save()
                     
                     print(f"Generated {architecture_nodes_created} architecture nodes")

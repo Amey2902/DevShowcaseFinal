@@ -13,7 +13,6 @@ class AnalysisEngine:
         'python': ['Flask', 'Django', 'FastAPI'],
         'javascript': ['Express.js', 'NestJS'],
         'typescript': ['Express.js', 'NestJS', 'React'],
-        'java': ['Spring Boot'],
         'csharp': ['ASP.NET'],
     }
     
@@ -181,16 +180,6 @@ class AnalysisEngine:
             else:
                 return 'javascript', 'Express.js'
         
-        # Check for Java (Spring Boot)
-        java_files = list(path.rglob('*.java'))
-        pom_xml = path / 'pom.xml'
-        
-        print(f"Java files found: {len(java_files)}")
-        print(f"pom.xml exists: {pom_xml.exists()}")
-        
-        if pom_xml.exists() or java_files:
-            return 'java', 'Spring Boot'
-        
         # Check for C# (ASP.NET)
         cs_files = list(path.rglob('*.cs'))
         csproj_files = list(path.rglob('*.csproj'))
@@ -249,7 +238,7 @@ class AnalysisEngine:
             return 'cpp', 'C++'
         
         # If we have any code files at all, try to make a best guess
-        all_code_files = python_files + js_files + ts_files + java_files + cs_files + php_files + rb_files + go_files + cpp_files
+        all_code_files = python_files + js_files + ts_files + cs_files + php_files + rb_files + go_files + cpp_files
         
         print(f"Total code files found: {len(all_code_files)}")
         print(f"=== End Language Detection Debug ===")
@@ -260,8 +249,6 @@ class AnalysisEngine:
                 return 'python', 'Flask'
             elif js_files or ts_files:
                 return 'javascript', 'Express.js'
-            elif java_files:
-                return 'java', 'Spring Boot'
             elif cs_files:
                 return 'csharp', 'ASP.NET'
             elif php_files:
@@ -372,7 +359,6 @@ class AnalysisEngine:
             'Django': 8000,
             'FastAPI': 8000,
             'NestJS': 3000,
-            'Spring Boot': 8080,
             'ASP.NET': 5000,
             'Web Application': 8000,
             'Generic Project': 8000,
@@ -530,13 +516,85 @@ class AnalysisEngine:
         """Use Groq AI to analyze code and find endpoints."""
         all_endpoints = []
         
+        # For Express.js and Django, identify main files that contain mount paths/includes
+        main_server_files = []
+        route_files = []
+        
+        if framework == 'Express.js':
+            for file_path in code_files:
+                file_name_lower = file_path.name.lower()
+                # Main server files that typically contain app.use() mount paths
+                # Check both exact names and patterns
+                is_main_file = (
+                    file_name_lower in ['server.js', 'app.js', 'index.js', 'main.js'] or
+                    'server' in file_name_lower or
+                    file_name_lower.endswith('app.js')
+                )
+                
+                # Also check file content for app.use() patterns (quick check)
+                if not is_main_file:
+                    try:
+                        content = file_path.read_text(encoding='utf-8', errors='ignore')
+                        # If file contains app.use() with route mounting, it's likely a main file
+                        if 'app.use(' in content and ('router' in content.lower() or 'routes' in content.lower()):
+                            is_main_file = True
+                    except:
+                        pass
+                
+                if is_main_file:
+                    main_server_files.append(file_path)
+                else:
+                    route_files.append(file_path)
+            
+            # If we found main server files, include them in every batch
+            if main_server_files:
+                print(f"Found {len(main_server_files)} main server files (will include in all batches):")
+                for f in main_server_files:
+                    print(f"  - {f.name}")
+                code_files_to_batch = route_files
+            else:
+                print("No main server files found - analyzing all files normally")
+                code_files_to_batch = code_files
+        
+        elif framework == 'Django':
+            for file_path in code_files:
+                file_name_lower = file_path.name.lower()
+                # Main urls.py files that typically contain include() patterns
+                is_main_urls = file_name_lower == 'urls.py'
+                
+                if is_main_urls:
+                    try:
+                        content = file_path.read_text(encoding='utf-8', errors='ignore')
+                        # Check if it's a main urls.py with include() statements
+                        if 'include(' in content:
+                            main_server_files.append(file_path)
+                        else:
+                            route_files.append(file_path)
+                    except:
+                        route_files.append(file_path)
+                else:
+                    route_files.append(file_path)
+            
+            # If we found main urls.py files, include them in every batch
+            if main_server_files:
+                print(f"Found {len(main_server_files)} main Django urls.py files (will include in all batches):")
+                for f in main_server_files:
+                    print(f"  - {f}")
+                code_files_to_batch = route_files
+            else:
+                print("No main Django urls.py files found - analyzing all files normally")
+                code_files_to_batch = code_files
+        
+        else:
+            code_files_to_batch = code_files
+        
         # Adaptive batch size based on project complexity
-        if len(code_files) > 10:
+        if len(code_files_to_batch) > 10:
             batch_size = 3  # Smaller batches for complex projects
         else:
             batch_size = 4  # Standard batch size
             
-        total_batches = (len(code_files) + batch_size - 1) // batch_size
+        total_batches = (len(code_files_to_batch) + batch_size - 1) // batch_size
         
         print(f"=== AI Analysis Strategy ===")
         print(f"Total files to analyze: {len(code_files)}")
@@ -546,8 +604,12 @@ class AnalysisEngine:
         
         for batch_num in range(total_batches):
             start_idx = batch_num * batch_size
-            end_idx = min(start_idx + batch_size, len(code_files))
-            batch_files = code_files[start_idx:end_idx]
+            end_idx = min(start_idx + batch_size, len(code_files_to_batch))
+            batch_files = code_files_to_batch[start_idx:end_idx]
+            
+            # For Express.js and Django, prepend main files to each batch
+            if (framework == 'Express.js' or framework == 'Django') and main_server_files:
+                batch_files = main_server_files + batch_files
             
             try:
                 print(f"=== Batch {batch_num + 1}/{total_batches} ===")
@@ -582,8 +644,8 @@ class AnalysisEngine:
                 
                 # Wait between batches to avoid rate limiting (except for last batch)
                 if batch_num < total_batches - 1:
-                    wait_time = 3 if len(code_files) > 10 else 2
-                    print(f"Waiting {wait_time} seconds before next batch...")
+                    wait_time = 62  # Wait full 62s to let Groq's 60s TPM window reset
+                    print(f"Waiting {wait_time} seconds before next batch (TPM reset)...")
                     time.sleep(wait_time)
                 
             except ValueError as e:
@@ -592,7 +654,39 @@ class AnalysisEngine:
                 continue
         
         print(f"=== Analysis Complete ===")
-        print(f"Total endpoints found: {len(all_endpoints)}")
+        print(f"Total endpoints found before dedup: {len(all_endpoints)}")
+        
+        # Deduplicate: if same method+path exists with and without version prefix,
+        # keep only the versioned one (e.g. /v1/auth/login wins over /auth/login)
+        import re
+        VERSION_PREFIX_RE = re.compile(r'^(/v\d+(?:\.\d+)?)(/.+)$')
+        
+        def strip_version(path):
+            """Return path without leading version prefix."""
+            m = VERSION_PREFIX_RE.match(path)
+            return m.group(2) if m else path
+        
+        # Group by method + stripped path, prefer versioned paths
+        seen = {}  # key: "METHOD:stripped_path" → endpoint dict
+        for ep in all_endpoints:
+            method = ep.get('method', 'GET').upper()
+            path = ep.get('path', '')
+            stripped = strip_version(path)
+            key = f"{method}:{stripped}"
+            
+            if key not in seen:
+                seen[key] = ep
+            else:
+                # Prefer the versioned path over the unversioned one
+                existing_path = seen[key].get('path', '')
+                if VERSION_PREFIX_RE.match(path) and not VERSION_PREFIX_RE.match(existing_path):
+                    seen[key] = ep
+                    print(f"Dedup: replaced {existing_path} with {path}")
+                else:
+                    print(f"Dedup: skipped duplicate {path} (keeping {existing_path})")
+        
+        all_endpoints = list(seen.values())
+        print(f"Total endpoints after dedup: {len(all_endpoints)}")
         
         return all_endpoints
     
@@ -600,14 +694,32 @@ class AnalysisEngine:
         """Build AI prompt for endpoint detection."""
         base = Path(base_path)
         
-        # Collect COMPLETE code - NO TRUNCATION
+        # Token budget: free tier is 6000 TPM, ~4 chars per token → ~24000 chars total
+        # Reserve ~6000 chars for the prompt template, leaving ~18000 for code
+        MAX_CODE_CHARS = 18000
+        MAX_CHARS_PER_FILE = 4000  # Cap each file to avoid one large file eating the budget
+        
         code_snippets = []
+        total_chars = 0
+        
         for file_path in code_files:
             try:
                 content = file_path.read_text(encoding='utf-8', errors='ignore')
                 relative_path = file_path.relative_to(base)
-                # Send FULL file content - no limits!
-                code_snippets.append(f"File: {relative_path}\n```\n{content}\n```\n")
+                
+                # Truncate individual file if too large
+                if len(content) > MAX_CHARS_PER_FILE:
+                    content = content[:MAX_CHARS_PER_FILE] + f"\n... [truncated, {len(content) - MAX_CHARS_PER_FILE} chars omitted]"
+                
+                snippet = f"File: {relative_path}\n```\n{content}\n```\n"
+                
+                # Stop adding files if we'd exceed total budget
+                if total_chars + len(snippet) > MAX_CODE_CHARS:
+                    print(f"Skipping {file_path.name} - would exceed token budget ({total_chars} chars used)")
+                    break
+                
+                code_snippets.append(snippet)
+                total_chars += len(snippet)
             except Exception as e:
                 print(f"Error reading file {file_path}: {str(e)}")
                 continue
@@ -628,21 +740,29 @@ class AnalysisEngine:
             'Express.js': '''Look for ALL route definitions including:
 - app.get(), app.post(), app.put(), app.delete(), app.patch()
 - router.get(), router.post(), router.put(), router.delete(), router.patch()
-- app.use() with route paths
+- app.use() with route paths AND mount prefixes (e.g., app.use('/v1', router))
 - Express Router instances
+
+CRITICAL FOR EXPRESS.JS: When you find app.use('/prefix', router) patterns, you MUST:
+1. Identify the mount path prefix (e.g., '/v1', '/api', '/api/v2', '/api/products', '/api/users')
+2. Track which router variable is mounted at that prefix (e.g., productRoutes, userRoutes, orderRoutes)
+3. For ALL routes defined on that router IN ANY FILE, COMBINE the mount path with the route path
+4. Example: app.use('/api/orders', orderRoutes) in server.js + router.post('/', ...) in orderRoutes.js = path should be '/api/orders'
+5. Example: app.use('/api/products', productRoutes) in server.js + router.get('/:id', ...) in productRoutes.js = path should be '/api/products/:id'
+6. The "path" field in your JSON response MUST be the COMPLETE URL path including ALL mount prefixes
+7. NEVER return routes without their mount prefix - if you see router.get('/') in a route file, find where that router is mounted in server.js/app.js
+
 Find EVERY endpoint, even if there are many in one file.''',
             'Flask': 'Look for ALL @app.route() and @blueprint.route() decorators',
             'Django': 'Look for ALL path() or url() calls in urls.py files',
             'FastAPI': 'Look for ALL @app.get(), @app.post(), @router.get(), @router.post() decorators',
             'NestJS': 'Look for ALL @Get(), @Post(), @Put(), @Delete(), @Patch() decorators in @Controller() classes',
-            'Spring Boot': 'Look for ALL @GetMapping, @PostMapping, @PutMapping, @DeleteMapping, @RequestMapping annotations',
             'ASP.NET': 'Look for ALL [HttpGet], [HttpPost], [HttpPut], [HttpDelete], [Route] attributes',
             'Web Application': '''Look for ANY HTTP endpoint definitions including:
 - Express.js routes: app.get(), app.post(), router.get(), etc.
 - Flask routes: @app.route(), @blueprint.route()
 - Django URLs: path(), url() calls
 - FastAPI routes: @app.get(), @app.post(), @router.get(), etc.
-- Spring Boot: @GetMapping, @PostMapping, @RequestMapping
 - ASP.NET: [HttpGet], [HttpPost], [Route] attributes
 - Any other HTTP route definitions you can identify''',
             'Generic Project': '''Look for ANY HTTP endpoint definitions in any format:
@@ -665,6 +785,34 @@ CRITICAL RULES:
 3. DO NOT include React Router routes, Vue Router routes, Angular routes, or any frontend client-side routing (e.g. <Route path="/home">, createBrowserRouter, useNavigate, history.push, etc.)
 4. DO NOT include frontend page components or navigation links as endpoints.
 5. If this is a pure frontend project (React, Vue, Angular) with NO backend server code, return {{"endpoints": []}}
+6. NEVER use "ALL" as the HTTP method. Only use: GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS. If you see app.use('/path', router) without a specific method, look inside the router file for the actual methods. If you cannot determine the exact HTTP method, SKIP that endpoint entirely - do NOT include it with method "ALL".
+7. VERY IMPORTANT: For request_schema and response_schema, you MUST analyze the code carefully to extract the EXACT fields that the endpoint expects and returns. Look at:
+   - Model/Schema definitions (Mongoose schemas, SQLAlchemy models, Django models, Pydantic models, JOI validators, etc.)
+   - Request body parsing (req.body fields, request.json, request.data, @Body() decorators, etc.)
+   - Response data being sent back (res.json(), return Response(), jsonify(), etc.)
+   - Validation rules, decorators, and type annotations
+   - Do NOT leave request_schema or response_schema empty if the code contains field information!
+
+EXPRESS.JS MOUNT PATH EXAMPLE:
+If you see code like:
+  // In server.js or app.js:
+  app.use('/api/products', productRoutes);
+  app.use('/api/users', userRoutes);
+  
+  // In routes/productRoutes.js:
+  router.get('/:id', getProductById);
+  
+Then the complete path is: /api/products/:id (NOT just /:id)
+
+CRITICAL: If you find routes in separate files (like routes/productRoutes.js), you MUST look for where that router is mounted in the main server file (server.js, app.js, index.js) and include the mount prefix in the path.
+
+PATH PARAMETER RULES:
+1. If the path contains parameters like :id, :pk, <int:id>, {id}, etc., you MUST include them in BOTH the "path" field AND the "path_parameters" array
+2. Express.js format: /api/users/:id → path_parameters: [{{"name": "id", "type": "string", "description": "User ID"}}]
+3. Django format: /api/users/<int:pk>/ → path_parameters: [{{"name": "pk", "type": "integer", "description": "Primary key"}}]
+4. FastAPI format: /api/users/{{user_id}} → path_parameters: [{{"name": "user_id", "type": "string", "description": "User ID"}}]
+5. NEVER list path_parameters if they don't actually appear in the path field
+6. ALWAYS ensure the path field contains the parameter placeholder (e.g., /users/:id NOT /users/)
 
 Project Code:
 {code_text}
@@ -673,23 +821,37 @@ Return your response in this EXACT JSON format (no markdown, no extra text):
 {{
   "endpoints": [
     {{
-      "file": "path/to/file.js",
-      "line": 10,
-      "method": "GET",
+      "file": "routes/users.js",
+      "line": 15,
+      "method": "POST",
       "path": "/api/users",
-      "name": "Get Users",
-      "description": "Retrieves list of users",
+      "name": "Create User",
+      "description": "Creates a new user account",
       "auth_required": false,
       "auth_type": "",
       "path_parameters": [],
       "query_parameters": [],
-      "request_schema": {{}},
-      "response_schema": {{}}
+      "request_schema": {{
+        "username": {{"type": "string", "required": true, "description": "User's chosen username"}},
+        "email": {{"type": "string", "required": true, "description": "User's email address"}},
+        "password": {{"type": "string", "required": true, "description": "Account password"}}
+      }},
+      "response_schema": {{
+        "id": {{"type": "integer", "description": "Created user ID"}},
+        "username": {{"type": "string", "description": "User's username"}},
+        "email": {{"type": "string", "description": "User's email"}},
+        "created_at": {{"type": "string", "description": "ISO timestamp"}}
+      }}
     }}
   ]
 }}
 
-IMPORTANT: Include ALL backend API endpoints you find. If this is frontend-only with no server, return {{"endpoints": []}}.
+NOTE: The "path" field MUST include ALL mount prefixes from app.use(). 
+Example with mount path: If app.use('/v1', router) and router.post('/users'), then path = "/v1/users"
+
+IMPORTANT: Include ALL backend API endpoints you find. Extract REAL field names and types from the code for request_schema and response_schema. If this is frontend-only with no server, return {{"endpoints": []}}.
+
+CRITICAL FOR EXPRESS.JS: Before returning your response, verify that all endpoint paths include their mount prefixes from app.use(). The "path" field must be the COMPLETE URL path that the frontend will call (e.g., /v1/auth/register, NOT /auth/register).
 
 Return ONLY the JSON object, nothing else."""
         
@@ -728,6 +890,9 @@ Return ONLY the JSON object, nothing else."""
             if len(endpoints) > 0:
                 print(f"First endpoint: {endpoints[0]}")
             
+            # Validate and clean up path parameters
+            endpoints = self._validate_path_parameters(endpoints)
+            
             return endpoints
             
         except json.JSONDecodeError as e:
@@ -739,6 +904,87 @@ Return ONLY the JSON object, nothing else."""
             # If JSON parsing fails, return empty list
             return []
 
+    
+    def _validate_path_parameters(self, endpoints):
+        """
+        Validate that path_parameters array matches the path field.
+        Remove path parameters that don't appear in the path string.
+        
+        Args:
+            endpoints: List of endpoint dictionaries
+            
+        Returns:
+            List of endpoints with validated path_parameters
+        """
+        import re
+        
+        print(f"=== Validating Path Parameters ===")
+        
+        for endpoint in endpoints:
+            path = endpoint.get('path', '')
+            path_parameters = endpoint.get('path_parameters', [])
+            
+            if not path_parameters:
+                continue
+            
+            # Common path parameter patterns across frameworks
+            # Express.js: :id, :userId, :pk
+            # Django: <int:id>, <str:username>, <pk>
+            # FastAPI: {id}, {user_id}
+            # Flask: <id>, <int:id>
+            
+            # Extract all parameter names from the path
+            path_param_patterns = [
+                r':(\w+)',                    # Express.js :id
+                r'<(?:int|str|slug|uuid|path):(\w+)>',  # Django with type: <int:id>
+                r'<(\w+)>',                   # Django/Flask without type: <id>
+                r'\{(\w+)\}',                 # FastAPI {id}
+            ]
+            
+            found_params_in_path = set()
+            for pattern in path_param_patterns:
+                matches = re.findall(pattern, path)
+                found_params_in_path.update(matches)
+            
+            # Check each declared path parameter
+            valid_params = []
+            removed_params = []
+            
+            for param in path_parameters:
+                param_name = param.get('name', '')
+                
+                # Check if this parameter actually appears in the path
+                if param_name in found_params_in_path:
+                    valid_params.append(param)
+                else:
+                    removed_params.append(param_name)
+            
+            # Update the endpoint with validated parameters
+            if removed_params:
+                print(f"WARNING: Endpoint {endpoint.get('method', 'GET')} {path}")
+                print(f"  Removed invalid path_parameters: {removed_params}")
+                print(f"  Parameters found in path: {list(found_params_in_path)}")
+                endpoint['path_parameters'] = valid_params
+            
+            # Also check the reverse: parameters in path but not in path_parameters array
+            declared_param_names = {p.get('name', '') for p in valid_params}
+            missing_params = found_params_in_path - declared_param_names
+            
+            if missing_params:
+                print(f"INFO: Endpoint {endpoint.get('method', 'GET')} {path}")
+                print(f"  Found parameters in path not declared in path_parameters: {list(missing_params)}")
+                # Auto-add missing parameters with basic info
+                for missing_param in missing_params:
+                    valid_params.append({
+                        'name': missing_param,
+                        'type': 'string',
+                        'description': f'Path parameter: {missing_param}'
+                    })
+                    print(f"  Auto-added parameter: {missing_param}")
+                endpoint['path_parameters'] = valid_params
+        
+        print(f"=== Path Parameter Validation Complete ===")
+        return endpoints
     
     def _call_groq_ai_safely(self, prompt, max_retries=5):
         """Call Groq AI with retry logic and error handling."""
@@ -779,10 +1025,10 @@ Return ONLY the JSON object, nothing else."""
                     print(f"Rate limited, waiting {wait_time} seconds...")
                     time.sleep(wait_time)
                     continue
-                elif response.status_code == 400:
-                    # Bad request - likely prompt too long
-                    print(f"Bad request (400): {response.text}")
-                    raise ValueError(f"Prompt might be too long. Try uploading a smaller project or fewer files.")
+                elif response.status_code in (400, 413):
+                    # Prompt too large - no point retrying
+                    print(f"Prompt too large ({response.status_code}): {response.text[:200]}")
+                    raise ValueError("Prompt too large. Try uploading a smaller project or fewer files.")
                 else:
                     print(f"Groq API error: {response.status_code} - {response.text}")
                     raise ValueError(f"Groq API error: {response.status_code}")

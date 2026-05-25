@@ -113,12 +113,16 @@ def chat_view(request):
         )
 
         if groq_response.status_code != 200:
-            return Response({'error': 'AI service unavailable'}, status=503)
+            print(f"[chat_view] Groq returned {groq_response.status_code}: {groq_response.text}")
+            return Response({'error': f'AI service error: {groq_response.status_code}'}, status=503)
 
         reply = groq_response.json()['choices'][0]['message']['content']
         return Response({'reply': reply}, status=200)
 
     except requests.exceptions.Timeout:
-        return Response({'error': 'AI service unavailable'}, status=503)
-    except Exception:
-        return Response({'error': 'AI service unavailable'}, status=503)
+        return Response({'error': 'AI service timed out'}, status=503)
+    except Exception as e:
+        import traceback
+        print(f"[chat_view] Unexpected error: {e}")
+        traceback.print_exc()
+        return Response({'error': f'AI service unavailable: {str(e)}'}, status=503)

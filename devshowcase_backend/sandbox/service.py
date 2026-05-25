@@ -20,6 +20,86 @@ class SandboxService:
         return filtered[0] if filtered else 'default'
     
     @staticmethod
+    def _generate_mock_value(field_name, field_info, record_id=1):
+        """Generate a realistic mock value based on field name and type info."""
+        field_type = 'string'
+        if isinstance(field_info, dict):
+            field_type = field_info.get('type', 'string').lower()
+        elif isinstance(field_info, str):
+            field_type = field_info.lower()
+        
+        name = field_name.lower()
+        
+        # ID fields
+        if name in ('id', '_id'):
+            return record_id
+        
+        # Type & name-based mock values
+        if field_type in ('integer', 'number', 'int', 'float'):
+            if 'price' in name or 'cost' in name or 'amount' in name:
+                return round(19.99 + record_id * 10, 2)
+            if 'age' in name:
+                return 25 + record_id
+            if 'quantity' in name or 'count' in name or 'stock' in name:
+                return 10 * record_id
+            return record_id
+        
+        if field_type == 'boolean' or field_type == 'bool':
+            return True
+        
+        if field_type == 'array' or field_type == 'list':
+            return []
+        
+        if field_type == 'object' or field_type == 'dict':
+            return {}
+        
+        # String type - pick realistic value based on field name
+        if 'email' in name:
+            return f"user{record_id}@example.com"
+        if 'password' in name:
+            return "SecurePass123!"
+        if name in ('username', 'user_name'):
+            return f"user_{record_id}"
+        if name in ('name', 'first_name', 'firstname', 'fname'):
+            names = ['Alice', 'Bob', 'Charlie']
+            return names[(record_id - 1) % len(names)]
+        if name in ('last_name', 'lastname', 'lname', 'surname'):
+            return 'Smith'
+        if 'title' in name:
+            return f"Sample Title {record_id}"
+        if 'description' in name or 'desc' in name:
+            return f"This is a sample description for item {record_id}"
+        if 'content' in name or 'body' in name or 'text' in name:
+            return f"Sample content for record {record_id}"
+        if 'url' in name or 'link' in name:
+            return f"https://example.com/resource/{record_id}"
+        if 'phone' in name:
+            return f"+1-555-010{record_id}"
+        if 'address' in name:
+            return f"{100 + record_id} Main Street, City, ST 12345"
+        if 'status' in name:
+            return 'active'
+        if 'category' in name or 'type' in name:
+            return 'general'
+        if 'date' in name or 'created' in name or 'updated' in name or 'timestamp' in name:
+            return f"2024-01-0{min(record_id, 9)}T12:00:00Z"
+        if 'token' in name:
+            return f"tok_sample_{record_id}"
+        
+        return f"sample_{field_name}_{record_id}"
+    
+    @staticmethod
+    def _generate_record_from_schema(schema, record_id):
+        """Generate a complete mock record from a response_schema."""
+        record = {}
+        for field_name, field_info in schema.items():
+            record[field_name] = SandboxService._generate_mock_value(field_name, field_info, record_id)
+        # Always include an id if not in schema
+        if 'id' not in record and '_id' not in record:
+            record['id'] = record_id
+        return record
+    
+    @staticmethod
     def generate_sandbox(project):
         """Generate sandbox from project endpoints"""
         env, created = SandboxEnvironment.objects.get_or_create(project=project)
@@ -53,8 +133,13 @@ class SandboxService:
                         SandboxRecord.objects.create(collection=collection, data=item)
                 elif isinstance(endpoint.sample_response, dict):
                     SandboxRecord.objects.create(collection=collection, data=endpoint.sample_response)
+            elif endpoint.response_schema and isinstance(endpoint.response_schema, dict) and len(endpoint.response_schema) > 0:
+                # Use response_schema to generate accurate mock records
+                for i in range(1, 4):
+                    mock_data = SandboxService._generate_record_from_schema(endpoint.response_schema, i)
+                    SandboxRecord.objects.create(collection=collection, data=mock_data)
             else:
-                # Generate dummy data if no sample_response
+                # Fallback: generate context-aware dummy data from endpoint info
                 for i in range(1, 4):
                     dummy_data = {
                         'id': i,
@@ -94,16 +179,21 @@ class SandboxService:
                     environment=env,
                     name=resource_name
                 )
-                # Create some default mock data
-                for i in range(1, 4):
-                    dummy_data = {
-                        'id': i,
-                        'title': f'Sample {resource_name.capitalize()} {i}',
-                        'description': f'This is a sample {resource_name} for testing',
-                        'status': 'active',
-                        'created_at': '2024-01-01T00:00:00Z'
-                    }
-                    SandboxRecord.objects.create(collection=collection, data=dummy_data)
+                # Create schema-aware mock data if available
+                if endpoint.response_schema and isinstance(endpoint.response_schema, dict) and len(endpoint.response_schema) > 0:
+                    for i in range(1, 4):
+                        mock_data = SandboxService._generate_record_from_schema(endpoint.response_schema, i)
+                        SandboxRecord.objects.create(collection=collection, data=mock_data)
+                else:
+                    for i in range(1, 4):
+                        dummy_data = {
+                            'id': i,
+                            'title': f'Sample {resource_name.capitalize()} {i}',
+                            'description': f'This is a sample {resource_name} for testing',
+                            'status': 'active',
+                            'created_at': '2024-01-01T00:00:00Z'
+                        }
+                        SandboxRecord.objects.create(collection=collection, data=dummy_data)
             
             method = endpoint.method
             
@@ -141,15 +231,18 @@ class SandboxService:
                         if r.data.get('id') == record_id:
                             return {'status_code': 200, 'data': r.data, 'error': None}
                     
-                    # If not found, generate a mock response
-                    mock_data = {
-                        'id': record_id,
-                        'title': f'Sample {resource_name.capitalize()} {record_id}',
-                        'description': f'This is a mock {resource_name} for sandbox testing',
-                        'status': 'active',
-                        'created_at': '2024-01-01T00:00:00Z',
-                        'updated_at': '2024-01-01T00:00:00Z'
-                    }
+                    # If not found, generate a schema-aware mock response
+                    if endpoint.response_schema and isinstance(endpoint.response_schema, dict) and len(endpoint.response_schema) > 0:
+                        mock_data = SandboxService._generate_record_from_schema(endpoint.response_schema, record_id)
+                    else:
+                        mock_data = {
+                            'id': record_id,
+                            'title': f'Sample {resource_name.capitalize()} {record_id}',
+                            'description': f'This is a mock {resource_name} for sandbox testing',
+                            'status': 'active',
+                            'created_at': '2024-01-01T00:00:00Z',
+                            'updated_at': '2024-01-01T00:00:00Z'
+                        }
                     return {'status_code': 200, 'data': mock_data, 'error': None}
                 else:
                     # Return list of records

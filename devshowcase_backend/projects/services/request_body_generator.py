@@ -27,19 +27,24 @@ class RequestBodyGenerator:
         try:
             api_key = settings.GROQ_API_KEY
             
+            schema_info = ""
+            if endpoint.request_schema:
+                schema_info = f"\n\nRequest Schema:\n{json.dumps(endpoint.request_schema, indent=2)}"
+            
             prompt = f"""Generate a realistic JSON request body for this API endpoint:
 
 Endpoint: {endpoint.name}
 Method: {endpoint.method}
 URL: {endpoint.url}
-Description: {endpoint.description or 'No description'}
+Description: {endpoint.description or 'No description'}{schema_info}
 
 Requirements:
 1. Create realistic sample data that makes sense for this endpoint
 2. Use appropriate data types (strings, numbers, booleans, arrays, objects)
 3. Include all likely required fields
 4. Use realistic values (real names, emails, dates, etc.)
-5. Return ONLY valid JSON, no markdown, no explanations
+5. MUST strictly adhere to the provided Request Schema if available (matching exact fields and types)
+6. Return ONLY valid JSON, no markdown, no explanations
 
 Example for a "Create User" endpoint:
 {{

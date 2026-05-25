@@ -222,7 +222,7 @@ const ProjectUpload = ({ projectId, onUploadStart }) => {
       </div>
       <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem', lineHeight: 1.65, fontSize: '0.9375rem' }}>
         Upload your project code and let AI automatically detect and document your API endpoints.
-        Supports <span style={{ color: 'var(--accent-primary)', fontWeight: 600 }}>Express.js, Flask, Django, FastAPI, NestJS, Spring Boot, and ASP.NET</span>.
+        Supports <span style={{ color: 'var(--accent-primary)', fontWeight: 600 }}>Express.js, Flask, Django, FastAPI, NestJS, and ASP.NET</span>.
       </p>
 
       {/* Method toggle */}

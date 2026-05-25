@@ -21,13 +21,18 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId, liveBaseUrl = ''
   const [searchTerm, setSearchTerm] = useState('')
   const [visibleEndpoints, setVisibleEndpoints] = useState(20)
   const [liveBaseUrlOverride, setLiveBaseUrlOverride] = useState('')
+  const [requestTab, setRequestTab] = useState('body')
+  const [queryParams, setQueryParams] = useState([{ key: '', value: '', enabled: true }])
+  const [headers, setHeaders] = useState([{ key: 'Content-Type', value: 'application/json', enabled: true }])
+  const [authType, setAuthType] = useState('none')
+  const [authToken, setAuthToken] = useState('')
+  const [authApiKey, setAuthApiKey] = useState({ key: '', value: '' })
 
   const frameworks = [
     { id: 'express', name: 'Express.js', icon: '🟢', description: 'Node.js web framework' },
     { id: 'fastapi', name: 'FastAPI', icon: '🐍', description: 'Modern Python API framework' },
     { id: 'flask', name: 'Flask', icon: '🌶️', description: 'Lightweight Python framework' },
-    { id: 'django', name: 'Django REST', icon: '🎸', description: 'Python web framework' },
-    { id: 'spring', name: 'Spring Boot', icon: '☕', description: 'Java enterprise framework' }
+    { id: 'django', name: 'Django REST', icon: '🎸', description: 'Python web framework' }
   ]
 
   // Helper function to resolve path parameters in URL
@@ -39,12 +44,13 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId, liveBaseUrl = ''
     let resolvedUrl = url
 
     pathParameters.forEach((param, index) => {
-      // Handle both object and string parameters
       const paramName = typeof param === 'object' ? param.name || `param_${index}` : param;
       const value = customValues[paramName] || getDefaultParamValue(paramName)
-      // Replace :param, {param}, and <param> formats
-      resolvedUrl = resolvedUrl.replace(new RegExp(`:${paramName}\\b`, 'g'), value)
+      // All paths are now normalized to {param} format
       resolvedUrl = resolvedUrl.replace(new RegExp(`\\{${paramName}\\}`, 'g'), value)
+      // Also handle legacy formats just in case
+      resolvedUrl = resolvedUrl.replace(new RegExp(`:${paramName}\\b`, 'g'), value)
+      resolvedUrl = resolvedUrl.replace(new RegExp(`<(?:int|str|slug|uuid|path):${paramName}>`, 'g'), value)
       resolvedUrl = resolvedUrl.replace(new RegExp(`<${paramName}>`, 'g'), value)
     })
 
@@ -106,6 +112,7 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId, liveBaseUrl = ''
     setSelectedEndpoint(endpoint)
     setRequestBody(JSON.stringify(endpoint.sample_body || {}, null, 2))
     setResponse(null)
+    setRequestTab('body')
 
     if (setEndpointContext) {
       setEndpointContext({
@@ -131,6 +138,58 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId, liveBaseUrl = ''
       setPathParamValues({})
     }
   }, [setEndpointContext])
+
+  const addQueryParam = () => {
+    setQueryParams([...queryParams, { key: '', value: '', enabled: true }])
+  }
+
+  const updateQueryParam = (index, field, value) => {
+    const updated = [...queryParams]
+    updated[index][field] = value
+    setQueryParams(updated)
+  }
+
+  const removeQueryParam = (index) => {
+    setQueryParams(queryParams.filter((_, i) => i !== index))
+  }
+
+  const addHeader = () => {
+    setHeaders([...headers, { key: '', value: '', enabled: true }])
+  }
+
+  const updateHeader = (index, field, value) => {
+    const updated = [...headers]
+    updated[index][field] = value
+    setHeaders(updated)
+  }
+
+  const removeHeader = (index) => {
+    setHeaders(headers.filter((_, i) => i !== index))
+  }
+
+  const buildQueryString = () => {
+    const enabled = queryParams.filter(p => p.enabled && p.key)
+    if (enabled.length === 0) return ''
+    return '?' + enabled.map(p => `${encodeURIComponent(p.key)}=${encodeURIComponent(p.value)}`).join('&')
+  }
+
+  const buildHeaders = () => {
+    const result = { 'Content-Type': 'application/json' }
+    
+    // Add custom headers
+    headers.filter(h => h.enabled && h.key).forEach(h => {
+      result[h.key] = h.value
+    })
+    
+    // Add auth headers (these override custom headers if there's a conflict)
+    if (authType === 'bearer' && authToken) {
+      result['Authorization'] = `Bearer ${authToken}`
+    } else if (authType === 'apikey' && authApiKey.key && authApiKey.value) {
+      result[authApiKey.key] = authApiKey.value
+    }
+    
+    return result
+  }
 
   const handlePathParamChange = (param, value) => {
     setPathParamValues(prev => ({
@@ -191,8 +250,7 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId, liveBaseUrl = ''
       'express': 'js',
       'fastapi': 'py',
       'flask': 'py',
-      'django': 'py',
-      'spring': 'java'
+      'django': 'py'
     }
     return extensions[framework] || 'txt'
   }
@@ -244,6 +302,10 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId, liveBaseUrl = ''
           pathParamValues
         )
 
+        // Add query parameters
+        const queryString = buildQueryString()
+        resolvedUrl += queryString
+
         // Use AI-detected base URL from project, or manual override if set
         const effectiveBase = liveBaseUrlOverride.trim() || liveBaseUrl
         if (effectiveBase) {
@@ -258,7 +320,7 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId, liveBaseUrl = ''
 
         const fetchOptions = {
           method: selectedEndpoint.method,
-          headers: { 'Content-Type': 'application/json' },
+          headers: buildHeaders(),
         }
         if (!['GET', 'HEAD'].includes(selectedEndpoint.method)) {
           fetchOptions.body = JSON.stringify(customBody)
@@ -761,67 +823,6 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId, liveBaseUrl = ''
                 }}>
                   {resolvePathParameters(selectedEndpoint.url, selectedEndpoint.path_parameters, pathParamValues)}
                 </p>
-                {selectedEndpoint.path_parameters && selectedEndpoint.path_parameters.length > 0 && (
-                  <div style={{
-                    padding: '1rem',
-                    background: 'rgba(59, 130, 246, 0.1)',
-                    border: '1px solid rgba(59, 130, 246, 0.3)',
-                    borderRadius: 'var(--radius-md)',
-                    marginBottom: '0.75rem'
-                  }}>
-                    <div style={{ 
-                      fontSize: '0.875rem', 
-                      fontWeight: '700', 
-                      color: 'var(--text-primary)',
-                      marginBottom: '0.75rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.5rem'
-                    }}>
-                      📌 Path Parameters
-                    </div>
-                    {selectedEndpoint.path_parameters.map((param, index) => {
-                      // Handle both object and string parameters
-                      const paramName = typeof param === 'object' ? param.name || `param_${index}` : param;
-                      const paramKey = typeof param === 'object' ? param.name || index : param;
-                      
-                      return (
-                        <div key={paramKey} style={{ marginBottom: '0.75rem' }}>
-                          <label style={{ 
-                            display: 'block',
-                            fontSize: '0.8125rem',
-                            fontWeight: '600',
-                            color: 'var(--text-secondary)',
-                            marginBottom: '0.375rem',
-                            fontFamily: 'var(--font-mono)'
-                          }}>
-                            {paramName}
-                          </label>
-                          <input
-                            type="text"
-                            value={pathParamValues[paramName] || ''}
-                            onChange={(e) => handlePathParamChange(paramName, e.target.value)}
-                            placeholder={`Enter ${paramName}`}
-                          style={{
-                            width: '100%',
-                            padding: '0.5rem 0.75rem',
-                            fontSize: '0.875rem',
-                            fontFamily: 'var(--font-mono)',
-                            background: 'var(--bg-primary)',
-                            border: '1px solid var(--border-secondary)',
-                            borderRadius: 'var(--radius-md)',
-                            color: 'var(--text-primary)',
-                            outline: 'none',
-                            transition: 'border-color 0.2s'
-                          }}
-                          onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
-                          onBlur={(e) => e.target.style.borderColor = 'var(--border-secondary)'}
-                        />
-                      </div>
-                      );
-                    })}
-                  </div>
-                )}
                 {selectedEndpoint.description && (
                   <p style={{ color: 'var(--text-secondary)', fontSize: '0.9375rem', margin: 0 }}>
                     {selectedEndpoint.description}
@@ -829,31 +830,487 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId, liveBaseUrl = ''
                 )}
               </div>
 
-              {selectedEndpoint.method !== 'GET' && (
-                <div style={{ marginBottom: '1.5rem' }}>
-                  <label className="form-label" style={{ marginBottom: '0.75rem' }}>
-                    Request Body (JSON)
-                  </label>
-                  <textarea
-                    className="code-textarea"
-                    rows="10"
-                    value={requestBody}
-                    onChange={(e) => setRequestBody(e.target.value)}
-                    style={{
-                      width: '100%',
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '0.875rem',
-                      lineHeight: '1.6',
-                      background: 'var(--bg-primary)',
-                      border: '1px solid var(--border-secondary)',
-                      borderRadius: 'var(--radius-md)',
-                      padding: '1rem',
-                      color: 'var(--text-primary)',
-                      resize: 'vertical'
-                    }}
-                  />
+              {/* Request Tabs - Postman Style */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <div style={{
+                  display: 'flex',
+                  gap: '0.5rem',
+                  borderBottom: '2px solid var(--border-primary)',
+                  marginBottom: '1rem'
+                }}>
+                  {['params', 'body', 'headers', 'auth'].map(tab => (
+                    <button
+                      key={tab}
+                      onClick={() => setRequestTab(tab)}
+                      style={{
+                        padding: '0.75rem 1.25rem',
+                        background: requestTab === tab ? 'var(--bg-tertiary)' : 'transparent',
+                        color: requestTab === tab ? 'var(--accent-primary)' : 'var(--text-secondary)',
+                        border: 'none',
+                        borderBottom: requestTab === tab ? '2px solid var(--accent-primary)' : '2px solid transparent',
+                        marginBottom: '-2px',
+                        fontSize: '0.875rem',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        textTransform: 'capitalize'
+                      }}
+                    >
+                      {tab === 'params' ? '📌 Params' : 
+                       tab === 'body' ? '📝 Body' :
+                       tab === 'headers' ? '📋 Headers' :
+                       '🔐 Auth'}
+                    </button>
+                  ))}
                 </div>
-              )}
+
+                {/* Params Tab */}
+                {requestTab === 'params' && (
+                  <div style={{
+                    padding: '1.5rem',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-primary)',
+                    borderRadius: 'var(--radius-md)',
+                    minHeight: '200px'
+                  }}>
+                    {/* Path Parameters */}
+                    {selectedEndpoint.path_parameters && selectedEndpoint.path_parameters.length > 0 && (
+                      <div style={{ marginBottom: '1.5rem' }}>
+                        <h5 style={{ 
+                          fontSize: '0.875rem', 
+                          fontWeight: '700', 
+                          color: 'var(--text-primary)',
+                          marginBottom: '0.75rem'
+                        }}>
+                          Path Parameters
+                        </h5>
+                        {selectedEndpoint.path_parameters.map((param, index) => {
+                          const paramName = typeof param === 'object' ? param.name || `param_${index}` : param;
+                          const paramKey = typeof param === 'object' ? param.name || index : param;
+                          
+                          return (
+                            <div key={paramKey} style={{ marginBottom: '0.75rem' }}>
+                              <label style={{ 
+                                display: 'block',
+                                fontSize: '0.8125rem',
+                                fontWeight: '600',
+                                color: 'var(--text-secondary)',
+                                marginBottom: '0.375rem',
+                                fontFamily: 'var(--font-mono)'
+                              }}>
+                                {paramName}
+                              </label>
+                              <input
+                                type="text"
+                                value={pathParamValues[paramName] || ''}
+                                onChange={(e) => handlePathParamChange(paramName, e.target.value)}
+                                placeholder={`Enter ${paramName}`}
+                                style={{
+                                  width: '100%',
+                                  padding: '0.5rem 0.75rem',
+                                  fontSize: '0.875rem',
+                                  fontFamily: 'var(--font-mono)',
+                                  background: 'var(--bg-primary)',
+                                  border: '1px solid var(--border-secondary)',
+                                  borderRadius: 'var(--radius-md)',
+                                  color: 'var(--text-primary)',
+                                  outline: 'none',
+                                  transition: 'border-color 0.2s'
+                                }}
+                                onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                                onBlur={(e) => e.target.style.borderColor = 'var(--border-secondary)'}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Query Parameters */}
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                        <h5 style={{ 
+                          fontSize: '0.875rem', 
+                          fontWeight: '700', 
+                          color: 'var(--text-primary)',
+                          margin: 0
+                        }}>
+                          Query Parameters
+                        </h5>
+                        <button
+                          onClick={addQueryParam}
+                          style={{
+                            padding: '0.375rem 0.75rem',
+                            background: 'var(--accent-primary)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: 'var(--radius-sm)',
+                            fontSize: '0.75rem',
+                            fontWeight: '600',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          + Add
+                        </button>
+                      </div>
+                      {queryParams.map((param, index) => (
+                        <div key={index} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', alignItems: 'center' }}>
+                          <input
+                            type="checkbox"
+                            checked={param.enabled}
+                            onChange={(e) => updateQueryParam(index, 'enabled', e.target.checked)}
+                            style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                          />
+                          <input
+                            type="text"
+                            placeholder="Key"
+                            value={param.key}
+                            onChange={(e) => updateQueryParam(index, 'key', e.target.value)}
+                            style={{
+                              flex: 1,
+                              padding: '0.5rem',
+                              fontSize: '0.8125rem',
+                              fontFamily: 'var(--font-mono)',
+                              background: 'var(--bg-primary)',
+                              border: '1px solid var(--border-secondary)',
+                              borderRadius: 'var(--radius-sm)',
+                              color: 'var(--text-primary)'
+                            }}
+                          />
+                          <input
+                            type="text"
+                            placeholder="Value"
+                            value={param.value}
+                            onChange={(e) => updateQueryParam(index, 'value', e.target.value)}
+                            style={{
+                              flex: 1,
+                              padding: '0.5rem',
+                              fontSize: '0.8125rem',
+                              fontFamily: 'var(--font-mono)',
+                              background: 'var(--bg-primary)',
+                              border: '1px solid var(--border-secondary)',
+                              borderRadius: 'var(--radius-sm)',
+                              color: 'var(--text-primary)'
+                            }}
+                          />
+                          <button
+                            onClick={() => removeQueryParam(index)}
+                            style={{
+                              padding: '0.5rem',
+                              background: 'transparent',
+                              color: 'var(--error)',
+                              border: 'none',
+                              cursor: 'pointer',
+                              fontSize: '1rem'
+                            }}
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Body Tab */}
+                {requestTab === 'body' && (
+                  <div style={{
+                    padding: '1.5rem',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-primary)',
+                    borderRadius: 'var(--radius-md)'
+                  }}>
+                    {selectedEndpoint.method !== 'GET' ? (
+                      <>
+                        <label style={{ 
+                          display: 'block',
+                          fontSize: '0.875rem',
+                          fontWeight: '600',
+                          color: 'var(--text-secondary)',
+                          marginBottom: '0.75rem'
+                        }}>
+                          JSON Body
+                        </label>
+                        <textarea
+                          rows="12"
+                          value={requestBody}
+                          onChange={(e) => setRequestBody(e.target.value)}
+                          style={{
+                            width: '100%',
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: '0.875rem',
+                            lineHeight: '1.6',
+                            background: 'var(--bg-primary)',
+                            border: '1px solid var(--border-secondary)',
+                            borderRadius: 'var(--radius-md)',
+                            padding: '1rem',
+                            color: 'var(--text-primary)',
+                            resize: 'vertical'
+                          }}
+                        />
+                      </>
+                    ) : (
+                      <div style={{ 
+                        textAlign: 'center', 
+                        padding: '2rem',
+                        color: 'var(--text-tertiary)',
+                        fontSize: '0.875rem'
+                      }}>
+                        GET requests don't have a body
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Headers Tab */}
+                {requestTab === 'headers' && (
+                  <div style={{
+                    padding: '1.5rem',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-primary)',
+                    borderRadius: 'var(--radius-md)',
+                    minHeight: '200px'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                      <h5 style={{ 
+                        fontSize: '0.875rem', 
+                        fontWeight: '700', 
+                        color: 'var(--text-primary)',
+                        margin: 0
+                      }}>
+                        Request Headers
+                      </h5>
+                      <button
+                        onClick={addHeader}
+                        style={{
+                          padding: '0.375rem 0.75rem',
+                          background: 'var(--accent-primary)',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: 'var(--radius-sm)',
+                          fontSize: '0.75rem',
+                          fontWeight: '600',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        + Add
+                      </button>
+                    </div>
+                    {headers.map((header, index) => (
+                      <div key={index} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', alignItems: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={header.enabled}
+                          onChange={(e) => updateHeader(index, 'enabled', e.target.checked)}
+                          style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                        />
+                        <input
+                          type="text"
+                          placeholder="Header Key"
+                          value={header.key}
+                          onChange={(e) => updateHeader(index, 'key', e.target.value)}
+                          style={{
+                            flex: 1,
+                            padding: '0.5rem',
+                            fontSize: '0.8125rem',
+                            fontFamily: 'var(--font-mono)',
+                            background: 'var(--bg-primary)',
+                            border: '1px solid var(--border-secondary)',
+                            borderRadius: 'var(--radius-sm)',
+                            color: 'var(--text-primary)'
+                          }}
+                        />
+                        <input
+                          type="text"
+                          placeholder="Value"
+                          value={header.value}
+                          onChange={(e) => updateHeader(index, 'value', e.target.value)}
+                          style={{
+                            flex: 1,
+                            padding: '0.5rem',
+                            fontSize: '0.8125rem',
+                            fontFamily: 'var(--font-mono)',
+                            background: 'var(--bg-primary)',
+                            border: '1px solid var(--border-secondary)',
+                            borderRadius: 'var(--radius-sm)',
+                            color: 'var(--text-primary)'
+                          }}
+                        />
+                        <button
+                          onClick={() => removeHeader(index)}
+                          style={{
+                            padding: '0.5rem',
+                            background: 'transparent',
+                            color: 'var(--error)',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontSize: '1rem'
+                          }}
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Auth Tab */}
+                {requestTab === 'auth' && (
+                  <div style={{
+                    padding: '1.5rem',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-primary)',
+                    borderRadius: 'var(--radius-md)',
+                    minHeight: '200px'
+                  }}>
+                    <label style={{ 
+                      display: 'block',
+                      fontSize: '0.875rem',
+                      fontWeight: '600',
+                      color: 'var(--text-secondary)',
+                      marginBottom: '0.75rem'
+                    }}>
+                      Authorization Type
+                    </label>
+                    <select
+                      value={authType}
+                      onChange={(e) => setAuthType(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '0.5rem',
+                        fontSize: '0.875rem',
+                        background: 'var(--bg-primary)',
+                        border: '1px solid var(--border-secondary)',
+                        borderRadius: 'var(--radius-md)',
+                        color: 'var(--text-primary)',
+                        marginBottom: '1rem'
+                      }}
+                    >
+                      <option value="none">No Auth</option>
+                      <option value="bearer">Bearer Token</option>
+                      <option value="apikey">API Key</option>
+                    </select>
+
+                    {authType === 'bearer' && (
+                      <div>
+                        <label style={{ 
+                          display: 'block',
+                          fontSize: '0.8125rem',
+                          fontWeight: '600',
+                          color: 'var(--text-secondary)',
+                          marginBottom: '0.5rem'
+                        }}>
+                          Token
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Enter bearer token"
+                          value={authToken}
+                          onChange={(e) => setAuthToken(e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '0.5rem',
+                            fontSize: '0.875rem',
+                            fontFamily: 'var(--font-mono)',
+                            background: 'var(--bg-primary)',
+                            border: '1px solid var(--border-secondary)',
+                            borderRadius: 'var(--radius-md)',
+                            color: 'var(--text-primary)'
+                          }}
+                        />
+                        <p style={{ 
+                          fontSize: '0.75rem', 
+                          color: 'var(--text-tertiary)', 
+                          marginTop: '0.5rem',
+                          fontFamily: 'var(--font-mono)'
+                        }}>
+                          Will be sent as: Authorization: Bearer {authToken || '[token]'}
+                        </p>
+                      </div>
+                    )}
+
+                    {authType === 'apikey' && (
+                      <div>
+                        <div style={{ marginBottom: '0.75rem' }}>
+                          <label style={{ 
+                            display: 'block',
+                            fontSize: '0.8125rem',
+                            fontWeight: '600',
+                            color: 'var(--text-secondary)',
+                            marginBottom: '0.5rem'
+                          }}>
+                            Key
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g., X-API-Key"
+                            value={authApiKey.key}
+                            onChange={(e) => setAuthApiKey({ ...authApiKey, key: e.target.value })}
+                            style={{
+                              width: '100%',
+                              padding: '0.5rem',
+                              fontSize: '0.875rem',
+                              fontFamily: 'var(--font-mono)',
+                              background: 'var(--bg-primary)',
+                              border: '1px solid var(--border-secondary)',
+                              borderRadius: 'var(--radius-md)',
+                              color: 'var(--text-primary)'
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ 
+                            display: 'block',
+                            fontSize: '0.8125rem',
+                            fontWeight: '600',
+                            color: 'var(--text-secondary)',
+                            marginBottom: '0.5rem'
+                          }}>
+                            Value
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Enter API key value"
+                            value={authApiKey.value}
+                            onChange={(e) => setAuthApiKey({ ...authApiKey, value: e.target.value })}
+                            style={{
+                              width: '100%',
+                              padding: '0.5rem',
+                              fontSize: '0.875rem',
+                              fontFamily: 'var(--font-mono)',
+                              background: 'var(--bg-primary)',
+                              border: '1px solid var(--border-secondary)',
+                              borderRadius: 'var(--radius-md)',
+                              color: 'var(--text-primary)'
+                            }}
+                          />
+                        </div>
+                        {authApiKey.key && (
+                          <p style={{ 
+                            fontSize: '0.75rem', 
+                            color: 'var(--text-tertiary)', 
+                            marginTop: '0.5rem',
+                            fontFamily: 'var(--font-mono)'
+                          }}>
+                            Will be sent as: {authApiKey.key}: {authApiKey.value || '[value]'}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {authType === 'none' && (
+                      <div style={{ 
+                        textAlign: 'center', 
+                        padding: '2rem',
+                        color: 'var(--text-tertiary)',
+                        fontSize: '0.875rem'
+                      }}>
+                        No authentication will be used
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
 
               <button
                 onClick={handleExecute}

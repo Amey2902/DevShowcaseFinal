@@ -499,7 +499,10 @@ def upload_github(request, project_id):
     except Project.DoesNotExist:
         return Response({'error': 'Project not found'}, status=status.HTTP_404_NOT_FOUND)
     
-    github_url = request.data.get('github_url')
+    github_url = request.data.get('github_url', '')
+    if github_url:
+        github_url = github_url.strip()
+        
     generate_architecture = request.data.get('generate_architecture', False)
     if not github_url:
         return Response({'error': 'GitHub URL is required'}, status=status.HTTP_400_BAD_REQUEST)

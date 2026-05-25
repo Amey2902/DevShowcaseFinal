@@ -11,8 +11,7 @@ const APITranslator = ({ projectId, endpoints }) => {
     { id: 'express', name: 'Express.js', icon: '🟢', description: 'Node.js web framework' },
     { id: 'fastapi', name: 'FastAPI', icon: '🐍', description: 'Modern Python API framework' },
     { id: 'flask', name: 'Flask', icon: '🌶️', description: 'Lightweight Python framework' },
-    { id: 'django', name: 'Django REST', icon: '🎸', description: 'Python web framework' },
-    { id: 'spring', name: 'Spring Boot', icon: '☕', description: 'Java enterprise framework' }
+    { id: 'django', name: 'Django REST', icon: '🎸', description: 'Python web framework' }
   ]
 
   const handleTranslate = async () => {
@@ -67,8 +66,7 @@ const APITranslator = ({ projectId, endpoints }) => {
       'express': 'js',
       'fastapi': 'py',
       'flask': 'py',
-      'django': 'py',
-      'spring': 'java'
+      'django': 'py'
     }
     return extensions[framework] || 'txt'
   }
