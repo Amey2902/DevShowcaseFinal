@@ -588,11 +588,11 @@ class AnalysisEngine:
         else:
             code_files_to_batch = code_files
         
-        # Adaptive batch size based on project complexity
-        if len(code_files_to_batch) > 10:
-            batch_size = 3  # Smaller batches for complex projects
+        # Small batches to stay under 6000 TPM org limit
+        if len(code_files_to_batch) > 6:
+            batch_size = 1  # One route file at a time for complex projects
         else:
-            batch_size = 4  # Standard batch size
+            batch_size = 2  # Two files max per batch
             
         total_batches = (len(code_files_to_batch) + batch_size - 1) // batch_size
         
@@ -694,10 +694,10 @@ class AnalysisEngine:
         """Build AI prompt for endpoint detection."""
         base = Path(base_path)
         
-        # Token budget: free tier is 6000 TPM, ~4 chars per token → ~24000 chars total
-        # Reserve ~6000 chars for the prompt template, leaving ~18000 for code
-        MAX_CODE_CHARS = 18000
-        MAX_CHARS_PER_FILE = 4000  # Cap each file to avoid one large file eating the budget
+        # Token budget: org limit is 6000 TPM, ~4 chars per token → ~24000 chars total
+        # Reserve ~8000 chars for the prompt template, leaving ~4000 for code
+        MAX_CODE_CHARS = 4000
+        MAX_CHARS_PER_FILE = 1500  # Cap each file tightly
         
         code_snippets = []
         total_chars = 0
