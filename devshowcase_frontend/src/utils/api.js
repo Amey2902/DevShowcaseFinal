@@ -1,4 +1,6 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+// Empty string = relative URLs, nginx proxies /api/ to backend
+// Set VITE_API_URL in .env only if backend is on a different domain
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 export const createApiClient = (getToken) => {
   const request = async (url, options = {}) => {
