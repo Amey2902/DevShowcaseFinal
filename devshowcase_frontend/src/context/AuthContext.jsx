@@ -1,8 +1,8 @@
 import { createContext, useState, useEffect } from 'react'
 import axios from 'axios'
 
-// Configure axios base URL
-axios.defaults.baseURL = 'http://127.0.0.1:8000'
+// Use relative URLs — nginx proxies /api/ to backend
+axios.defaults.baseURL = import.meta.env.VITE_API_URL || ''
 
 export const AuthContext = createContext()
 
