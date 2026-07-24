@@ -48,15 +48,15 @@ class TechStack(models.Model):
 
 class ArchitectureNode(models.Model):
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='architecture_nodes')
-    name = models.CharField(max_length=100)
-    technology = models.CharField(max_length=100)
+    name = models.CharField(max_length=255)
+    technology = models.CharField(max_length=255)
     description = models.TextField()
     x_position = models.FloatField(default=0)
     y_position = models.FloatField(default=0)
     
     # AI generation tracking fields
     is_ai_generated = models.BooleanField(default=False)
-    ai_generation_source = models.CharField(max_length=100, blank=True)  # e.g., "package.json", "requirements.txt"
+    ai_generation_source = models.CharField(max_length=255, blank=True)  # e.g., "package.json", "requirements.txt"
     created_by_upload = models.ForeignKey('ProjectUpload', on_delete=models.SET_NULL, null=True, blank=True)
     ai_confidence_score = models.FloatField(null=True, blank=True)  # 0.0-1.0 confidence in detection
     
