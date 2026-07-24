@@ -567,7 +567,7 @@ class AnalysisEngine:
         return self._deduplicate_endpoints(all_endpoints)
         
     def _deduplicate_endpoints(self, all_endpoints):
-        """Deduplicate endpoints by method + normalized path."""
+        """Deduplicate endpoints by method + normalized path (merging /api/v1/... and /v1/...)."""
         import re
         seen = {}
         for ep in all_endpoints:
@@ -576,12 +576,20 @@ class AnalysisEngine:
             if not path or not path.startswith('/'):
                 path = '/' + path
             
-            key = f"{method}:{path}"
+            # Strip extra /api prefix if followed by /v1, /auth, /users, etc.
+            norm_path = re.sub(r'^/api(?=/v\d|/auth|/user|/product|/order|/admin|/docs|/)', '', path, flags=re.IGNORECASE)
+            if not norm_path or not norm_path.startswith('/'):
+                norm_path = '/' + norm_path
+            
+            key = f"{method}:{norm_path}"
             if key not in seen:
+                ep['path'] = norm_path
                 seen[key] = ep
             else:
-                # Keep the one with more description or schema info
-                if len(str(ep)) > len(str(seen[key])):
+                # Merge and keep the richer endpoint
+                existing = seen[key]
+                if len(str(ep)) > len(str(existing)):
+                    ep['path'] = norm_path
                     seen[key] = ep
                     
         return list(seen.values())
