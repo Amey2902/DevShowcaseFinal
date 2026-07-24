@@ -17,7 +17,7 @@ class AnalysisEngine:
     }
     
     GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
-    GROQ_MODEL = 'llama-3.3-70b-versatile'
+    GROQ_MODEL = 'llama-3.1-8b-instant'  # Higher token limits on free tier
     
     def __init__(self, upload_instance):
         """Initialize with a ProjectUpload instance."""
