@@ -630,9 +630,9 @@ class AnalysisEngine:
         """Build AI prompt for endpoint detection."""
         base = Path(base_path)
         
-        # Token budget: Max 4500 chars code for input
-        MAX_CODE_CHARS = 4500
-        MAX_CHARS_PER_FILE = 2000
+        # Token budget: Max 12000 chars (~3000 input tokens) -> stays well under 6000 TPM limit
+        MAX_CODE_CHARS = 12000
+        MAX_CHARS_PER_FILE = 3500
         
         code_snippets = []
         total_chars = 0
@@ -670,61 +670,20 @@ class AnalysisEngine:
             print(f"First file sample (200 chars): {code_text[:200]}")
         print(f"=== End Prompt Info ===")
         
-        # Framework-specific instructions
-        framework_hints = {
-            'Express.js': '''Look for ALL route definitions including:
-- app.get(), app.post(), app.put(), app.delete(), app.patch()
-- router.get(), router.post(), router.put(), router.delete(), router.patch()
-- app.use() with route paths AND mount prefixes (e.g., app.use('/v1', router))
-- Express Router instances
-
-CRITICAL FOR EXPRESS.JS: When you find app.use('/prefix', router) patterns, you MUST:
-1. Identify the mount path prefix (e.g., '/v1', '/api', '/api/v2', '/api/products', '/api/users')
-2. Track which router variable is mounted at that prefix (e.g., productRoutes, userRoutes, orderRoutes)
-3. For ALL routes defined on that router IN ANY FILE, COMBINE the mount path with the route path
-4. Example: app.use('/api/orders', orderRoutes) in server.js + router.post('/', ...) in orderRoutes.js = path should be '/api/orders'
-5. Example: app.use('/api/products', productRoutes) in server.js + router.get('/:id', ...) in productRoutes.js = path should be '/api/products/:id'
-6. The "path" field in your JSON response MUST be the COMPLETE URL path including ALL mount prefixes
-7. NEVER return routes without their mount prefix - if you see router.get('/') in a route file, find where that router is mounted in server.js/app.js
-
-Find EVERY endpoint, even if there are many in one file.''',
-            'Flask': 'Look for ALL @app.route() and @blueprint.route() decorators',
-            'Django': 'Look for ALL path() or url() calls in urls.py files',
-            'FastAPI': 'Look for ALL @app.get(), @app.post(), @router.get(), @router.post() decorators',
-            'NestJS': 'Look for ALL @Get(), @Post(), @Put(), @Delete(), @Patch() decorators in @Controller() classes',
-            'ASP.NET': 'Look for ALL [HttpGet], [HttpPost], [HttpPut], [HttpDelete], [Route] attributes',
-            'Web Application': '''Look for ANY HTTP endpoint definitions including:
-- Express.js routes: app.get(), app.post(), router.get(), etc.
-- Flask routes: @app.route(), @blueprint.route()
-- Django URLs: path(), url() calls
-- FastAPI routes: @app.get(), @app.post(), @router.get(), etc.
-- ASP.NET: [HttpGet], [HttpPost], [Route] attributes
-- Any other HTTP route definitions you can identify''',
-            'Generic Project': '''Look for ANY HTTP endpoint definitions in any format:
-- Route handlers, URL patterns, API endpoints
-- HTTP method decorators or annotations
-- Server route configurations
-- API documentation or specifications
-Find any patterns that look like web API endpoints.'''
-        }
-        
-        hint = framework_hints.get(framework, 'Look for ALL HTTP endpoint definitions')
-        
         prompt = f"""Detect all backend API endpoints in this {framework} code. Return ONLY JSON.
 
 Rules:
-- Include ONLY backend HTTP endpoints (Express/Flask/Django/FastAPI routes)
-- For Express: combine app.use('/prefix', router) + router.get('/path') = full path '/prefix/path'
-- Include path params (:id) in both path field and path_parameters array
-- Extract request/response fields from code
-- Skip frontend routes (React Router, etc.)
-- Use only: GET POST PUT DELETE PATCH
+- Include ONLY actual HTTP endpoint handlers (router.get, router.post, app.get, app.post, etc.)
+- DO NOT treat router module imports or route arrays (e.g. userRoute, authRoute) as single endpoints! Look inside the router files to find the individual HTTP endpoints (router.post('/register'), router.get('/:id'), etc.)
+- Combine mount paths: app.use('/v1', routes) + router.use('/auth', authRoute) + router.post('/register') = full path '/v1/auth/register'
+- Include path params (:id, :userId) in both path field and path_parameters array
+- Use only standard HTTP methods: GET POST PUT DELETE PATCH
 
 Code:
 {code_text}
 
 Return ONLY this JSON (no markdown):
-{{"endpoints":[{{"file":"","line":1,"method":"GET","path":"/api/x","name":"","description":"","auth_required":false,"auth_type":"","path_parameters":[],"query_parameters":[],"request_schema":{{}},"response_schema":{{}}}}]}}"""
+{{"endpoints":[{{"file":"","line":1,"method":"GET","path":"/v1/example","name":"","description":"","auth_required":false,"auth_type":"","path_parameters":[],"query_parameters":[],"request_schema":{{}},"response_schema":{{}}}}]}}"""
         
         return prompt
     
