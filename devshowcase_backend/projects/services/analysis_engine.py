@@ -464,7 +464,7 @@ class AnalysisEngine:
         # Classify files: route files vs non-route files
         route_keywords = ['route', 'router', 'urls', 'api', 'endpoint']
         main_app_keywords = ['app.js', 'app.ts', 'server.js', 'server.ts', 'main.js', 'main.ts', 'index.js', 'index.ts', 'main.py', 'app.py', 'wsgi.py', 'asgi.py']
-        exclude_keywords = ['controller', 'service', 'model', 'validation', 'middleware', 'util', 'helper', 'dto', 'config', 'test', 'spec', 'schema']
+        exclude_keywords = ['controller', 'service', 'model', 'validation', 'middleware', 'util', 'helper', 'dto', 'config', 'test', 'spec', 'schema', 'bin', 'script', 'vendor']
         
         primary_route_files = []
         app_entry_files = []
@@ -472,15 +472,19 @@ class AnalysisEngine:
         
         for file_path in code_files:
             file_name_lower = file_path.name.lower()
-            str_path_lower = str(file_path).lower()
+            str_path_lower = str(file_path).lower().replace('\\', '/')
+            
+            # Skip bin, scripts, vendor, node_modules
+            if any(dir_name in str_path_lower for dir_name in ['/bin/', '/scripts/', '/vendor/', '/dist/', '/build/', '/node_modules/']):
+                continue
             
             # Check if explicitly excluded (e.g. controllers, services, models, validations)
-            # Exception: NestJS / ASP.NET use controllers for routes, so don't exclude controllers for typescript/csharp
+            # Exception: NestJS / ASP.NET use controllers for routes
             is_excluded = False
             if language not in ['typescript', 'csharp']:
                 if any(ex in str_path_lower for ex in exclude_keywords):
                     is_excluded = True
-            elif any(ex in str_path_lower for ex in ['service', 'model', 'validation', 'middleware', 'util', 'helper', 'dto', 'config', 'test', 'spec']):
+            elif any(ex in str_path_lower for ex in ['service', 'model', 'validation', 'middleware', 'util', 'helper', 'dto', 'config', 'test', 'spec', 'bin', 'script']):
                 is_excluded = True
                 
             if is_excluded:
@@ -500,8 +504,8 @@ class AnalysisEngine:
         if not selected_files:
             selected_files = other_code_files
             
-        # Limit to top 10 route files maximum
-        selected_files = selected_files[:10]
+        # Limit to top 8 route files maximum
+        selected_files = selected_files[:8]
         
         print(f"=== Route File Selection Debug ===")
         print(f"Total code files scanned: {len(code_files)}")
@@ -516,50 +520,57 @@ class AnalysisEngine:
         """Use Groq AI to analyze code and find endpoints."""
         all_endpoints = []
         
-        # Check total character count of all selected route files combined
-        total_route_chars = 0
+        # Separate main server/router index files (e.g. app.js, routes/v1/index.js, urls.py)
+        # to include as routing context in every batch
+        main_context_files = []
+        route_files = []
+        
         for f in code_files:
-            try:
-                total_route_chars += len(f.read_text(encoding='utf-8', errors='ignore'))
-            except:
-                pass
+            fname = f.name.lower()
+            fpath_str = str(f).lower().replace('\\', '/')
+            # Main app files or route index files
+            if fname in ['app.js', 'app.ts', 'server.js', 'server.ts', 'main.js', 'urls.py'] or 'routes/v1/index.js' in fpath_str or 'routes/index.js' in fpath_str:
+                main_context_files.append(f)
+            else:
+                route_files.append(f)
                 
+        # Limit context files to max 2
+        main_context_files = main_context_files[:2]
+        
         print(f"=== AI Analysis Strategy ===")
         print(f"Total route files: {len(code_files)}")
-        print(f"Total combined size: {total_route_chars} characters")
+        print(f"Main context files included in all batches: {[f.name for f in main_context_files]}")
+        print(f"Route files to analyze: {[f.name for f in route_files]}")
         
-        # If all route files combined fit in a single prompt (<= 6000 chars), analyze them ALL AT ONCE!
-        # This allows AI to see complete app.use('/v1', routes) -> router.use('/auth', authRoute) -> router.post('/register') hierarchy!
-        if total_route_chars <= 6000 or len(code_files) <= 6:
-            print("Analyzing ALL route files together in 1 single pass for complete mount hierarchy!")
-            prompt = self.build_ai_prompt(code_files, framework, base_path)
-            response = self._call_groq_ai_safely(prompt)
-            all_endpoints = self.parse_ai_response(response, framework)
+        if not route_files:
+            route_files = main_context_files
+            main_context_files = []
             
-            self.upload.progress_percentage = 80
-            self.upload.current_message = f'AI analysis complete. Found {len(all_endpoints)} endpoints.'
-            self.upload.save()
-            
-            return self._deduplicate_endpoints(all_endpoints)
-            
-        # Fallback to batching if total size is very large
         batch_size = 2
-        total_batches = (len(code_files) + batch_size - 1) // batch_size
+        total_batches = (len(route_files) + batch_size - 1) // batch_size
         
         for batch_num in range(total_batches):
             start_idx = batch_num * batch_size
-            end_idx = min(start_idx + batch_size, len(code_files))
-            batch_files = code_files[start_idx:end_idx]
+            end_idx = min(start_idx + batch_size, len(route_files))
+            batch_target_files = route_files[start_idx:end_idx]
+            
+            # Combine main context files + current batch files
+            batch_files = []
+            for cf in main_context_files:
+                if cf not in batch_target_files:
+                    batch_files.append(cf)
+            batch_files.extend(batch_target_files)
             
             try:
                 print(f"=== Batch {batch_num + 1}/{total_batches} ===")
+                print(f"Files in batch: {[f.name for f in batch_files]}")
                 prompt = self.build_ai_prompt(batch_files, framework, base_path)
                 response = self._call_groq_ai_safely(prompt)
                 endpoints = self.parse_ai_response(response, framework)
                 all_endpoints.extend(endpoints)
                 
                 if batch_num < total_batches - 1:
-                    time.sleep(30)
+                    time.sleep(10)
             except Exception as e:
                 print(f"Error in batch {batch_num + 1}: {e}")
                 continue
@@ -567,32 +578,53 @@ class AnalysisEngine:
         return self._deduplicate_endpoints(all_endpoints)
         
     def _deduplicate_endpoints(self, all_endpoints):
-        """Deduplicate endpoints by method + normalized path (merging /api/v1/... and /v1/...)."""
+        """Deduplicate endpoints by method + normalized path, eliminating partial route suffixes."""
         import re
-        seen = {}
+        
+        cleaned_endpoints = []
         for ep in all_endpoints:
             method = ep.get('method', 'GET').upper()
-            path = ep.get('path', '')
-            if not path or not path.startswith('/'):
+            path = ep.get('path', '').strip()
+            if not path:
+                continue
+            if not path.startswith('/'):
                 path = '/' + path
             
-            # Strip extra /api prefix if followed by /v1, /auth, /users, etc.
+            # Strip duplicate /api prefix
             norm_path = re.sub(r'^/api(?=/v\d|/auth|/user|/product|/order|/admin|/docs|/)', '', path, flags=re.IGNORECASE)
-            if not norm_path or not norm_path.startswith('/'):
+            if not norm_path.startswith('/'):
                 norm_path = '/' + norm_path
+                
+            ep['method'] = method
+            ep['path'] = norm_path
+            cleaned_endpoints.append(ep)
             
-            key = f"{method}:{norm_path}"
-            if key not in seen:
-                ep['path'] = norm_path
-                seen[key] = ep
-            else:
-                # Merge and keep the richer endpoint
-                existing = seen[key]
-                if len(str(ep)) > len(str(existing)):
-                    ep['path'] = norm_path
-                    seen[key] = ep
-                    
-        return list(seen.values())
+        # Deduplicate: if endpoint A path is a suffix of endpoint B path (e.g. /register vs /v1/auth/register),
+        # keep ONLY the full mounted version (/v1/auth/register)!
+        final_endpoints = []
+        
+        # Sort by path length descending so longer/full paths come first
+        cleaned_endpoints.sort(key=lambda x: len(x['path']), reverse=True)
+        
+        for ep in cleaned_endpoints:
+            method = ep['method']
+            path = ep['path']
+            
+            # Check if this endpoint is a partial/shorter version of an already added endpoint
+            is_partial_duplicate = False
+            for existing in final_endpoints:
+                if existing['method'] == method:
+                    ex_path = existing['path']
+                    # Exact match OR path is suffix of full path (e.g. /register is end of /v1/auth/register)
+                    if ex_path == path or (len(path) < len(ex_path) and ex_path.endswith(path)):
+                        is_partial_duplicate = True
+                        print(f"Dedup: Dropped partial endpoint '{method} {path}' in favor of full '{method} {ex_path}'")
+                        break
+                        
+            if not is_partial_duplicate:
+                final_endpoints.append(ep)
+                
+        return final_endpoints
     
     def build_ai_prompt(self, code_files, framework, base_path):
         """Build AI prompt for endpoint detection."""
