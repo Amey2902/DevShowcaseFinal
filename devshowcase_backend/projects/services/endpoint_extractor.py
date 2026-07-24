@@ -103,10 +103,8 @@ class EndpointExtractor:
                         seen_endpoints.add(unique_key)
 
                         req_schema = endpoint_data.get('request_schema', {})
-                        from projects.services.request_body_generator import RequestBodyGenerator
-                        sample_body = RequestBodyGenerator.generate_from_schema(req_schema) or {}
 
-                        # Create endpoint
+                        # Create endpoint (sample_body remains empty until Generate Sandbox is clicked)
                         endpoint = Endpoint.objects.create(
                             project=self.project,
                             name=name,
@@ -122,7 +120,7 @@ class EndpointExtractor:
                             auth_type=endpoint_data.get('auth_type', ''),
                             request_schema=req_schema,
                             response_schema=endpoint_data.get('response_schema', {}),
-                            sample_body=sample_body,
+                            sample_body={},
                             auto_detected=True,
                             # AST Security Analysis fields
                             ast_security_level=endpoint_data.get('ast_security_level', ''),

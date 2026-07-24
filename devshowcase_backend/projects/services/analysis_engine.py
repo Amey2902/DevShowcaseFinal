@@ -461,10 +461,10 @@ class AnalysisEngine:
                     
                     code_files.append(file_path)
         
-        # Classify files: route files vs non-route files
-        route_keywords = ['route', 'router', 'urls', 'api', 'endpoint']
+        # Classify files: route files & validation/schema files vs non-route files
+        route_keywords = ['route', 'router', 'urls', 'api', 'endpoint', 'validation', 'validator', 'schema']
         main_app_keywords = ['app.js', 'app.ts', 'server.js', 'server.ts', 'main.js', 'main.ts', 'index.js', 'index.ts', 'main.py', 'app.py', 'wsgi.py', 'asgi.py']
-        exclude_keywords = ['controller', 'service', 'model', 'validation', 'middleware', 'util', 'helper', 'dto', 'config', 'test', 'spec', 'schema', 'bin', 'script', 'vendor']
+        exclude_keywords = ['controller', 'service', 'model', 'middleware', 'util', 'helper', 'dto', 'config', 'test', 'spec', 'bin', 'script', 'vendor']
         
         primary_route_files = []
         app_entry_files = []
@@ -478,13 +478,12 @@ class AnalysisEngine:
             if any(dir_name in str_path_lower for dir_name in ['/bin/', '/scripts/', '/vendor/', '/dist/', '/build/', '/node_modules/']):
                 continue
             
-            # Check if explicitly excluded (e.g. controllers, services, models, validations)
-            # Exception: NestJS / ASP.NET use controllers for routes
+            # Check if explicitly excluded
             is_excluded = False
             if language not in ['typescript', 'csharp']:
                 if any(ex in str_path_lower for ex in exclude_keywords):
                     is_excluded = True
-            elif any(ex in str_path_lower for ex in ['service', 'model', 'validation', 'middleware', 'util', 'helper', 'dto', 'config', 'test', 'spec', 'bin', 'script']):
+            elif any(ex in str_path_lower for ex in ['service', 'model', 'middleware', 'util', 'helper', 'dto', 'config', 'test', 'spec', 'bin', 'script']):
                 is_excluded = True
                 
             if is_excluded:
