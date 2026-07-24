@@ -694,10 +694,10 @@ class AnalysisEngine:
         """Build AI prompt for endpoint detection."""
         base = Path(base_path)
         
-        # Token budget: org limit is 6000 TPM, ~4 chars per token → ~24000 chars total
-        # Reserve ~8000 chars for the prompt template, leaving ~4000 for code
-        MAX_CODE_CHARS = 4000
-        MAX_CHARS_PER_FILE = 1500  # Cap each file tightly
+        # Token budget: org limit 6000 TPM, ~4 chars/token
+        # Compact prompt template ~500 tokens, leaving ~5500 tokens = ~22000 chars for code
+        MAX_CODE_CHARS = 8000
+        MAX_CHARS_PER_FILE = 2000
         
         code_snippets = []
         total_chars = 0
@@ -775,85 +775,21 @@ Find any patterns that look like web API endpoints.'''
         
         hint = framework_hints.get(framework, 'Look for ALL HTTP endpoint definitions')
         
-        prompt = f"""You are analyzing a {framework} project to detect BACKEND API endpoints only.
+        prompt = f"""Detect all backend API endpoints in this {framework} code. Return ONLY JSON.
 
-{hint}
+Rules:
+- Include ONLY backend HTTP endpoints (Express/Flask/Django/FastAPI routes)
+- For Express: combine app.use('/prefix', router) + router.get('/path') = full path '/prefix/path'
+- Include path params (:id) in both path field and path_parameters array
+- Extract request/response fields from code
+- Skip frontend routes (React Router, etc.)
+- Use only: GET POST PUT DELETE PATCH
 
-CRITICAL RULES:
-1. Find and list EVERY SINGLE backend API endpoint in the code below. Do not skip any.
-2. ONLY include real HTTP API endpoints that a server handles and returns data from (like Express routes, Flask routes, Django URLs, FastAPI routes, etc.)
-3. DO NOT include React Router routes, Vue Router routes, Angular routes, or any frontend client-side routing (e.g. <Route path="/home">, createBrowserRouter, useNavigate, history.push, etc.)
-4. DO NOT include frontend page components or navigation links as endpoints.
-5. If this is a pure frontend project (React, Vue, Angular) with NO backend server code, return {{"endpoints": []}}
-6. NEVER use "ALL" as the HTTP method. Only use: GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS. If you see app.use('/path', router) without a specific method, look inside the router file for the actual methods. If you cannot determine the exact HTTP method, SKIP that endpoint entirely - do NOT include it with method "ALL".
-7. VERY IMPORTANT: For request_schema and response_schema, you MUST analyze the code carefully to extract the EXACT fields that the endpoint expects and returns. Look at:
-   - Model/Schema definitions (Mongoose schemas, SQLAlchemy models, Django models, Pydantic models, JOI validators, etc.)
-   - Request body parsing (req.body fields, request.json, request.data, @Body() decorators, etc.)
-   - Response data being sent back (res.json(), return Response(), jsonify(), etc.)
-   - Validation rules, decorators, and type annotations
-   - Do NOT leave request_schema or response_schema empty if the code contains field information!
-
-EXPRESS.JS MOUNT PATH EXAMPLE:
-If you see code like:
-  // In server.js or app.js:
-  app.use('/api/products', productRoutes);
-  app.use('/api/users', userRoutes);
-  
-  // In routes/productRoutes.js:
-  router.get('/:id', getProductById);
-  
-Then the complete path is: /api/products/:id (NOT just /:id)
-
-CRITICAL: If you find routes in separate files (like routes/productRoutes.js), you MUST look for where that router is mounted in the main server file (server.js, app.js, index.js) and include the mount prefix in the path.
-
-PATH PARAMETER RULES:
-1. If the path contains parameters like :id, :pk, <int:id>, {id}, etc., you MUST include them in BOTH the "path" field AND the "path_parameters" array
-2. Express.js format: /api/users/:id → path_parameters: [{{"name": "id", "type": "string", "description": "User ID"}}]
-3. Django format: /api/users/<int:pk>/ → path_parameters: [{{"name": "pk", "type": "integer", "description": "Primary key"}}]
-4. FastAPI format: /api/users/{{user_id}} → path_parameters: [{{"name": "user_id", "type": "string", "description": "User ID"}}]
-5. NEVER list path_parameters if they don't actually appear in the path field
-6. ALWAYS ensure the path field contains the parameter placeholder (e.g., /users/:id NOT /users/)
-
-Project Code:
+Code:
 {code_text}
 
-Return your response in this EXACT JSON format (no markdown, no extra text):
-{{
-  "endpoints": [
-    {{
-      "file": "routes/users.js",
-      "line": 15,
-      "method": "POST",
-      "path": "/api/users",
-      "name": "Create User",
-      "description": "Creates a new user account",
-      "auth_required": false,
-      "auth_type": "",
-      "path_parameters": [],
-      "query_parameters": [],
-      "request_schema": {{
-        "username": {{"type": "string", "required": true, "description": "User's chosen username"}},
-        "email": {{"type": "string", "required": true, "description": "User's email address"}},
-        "password": {{"type": "string", "required": true, "description": "Account password"}}
-      }},
-      "response_schema": {{
-        "id": {{"type": "integer", "description": "Created user ID"}},
-        "username": {{"type": "string", "description": "User's username"}},
-        "email": {{"type": "string", "description": "User's email"}},
-        "created_at": {{"type": "string", "description": "ISO timestamp"}}
-      }}
-    }}
-  ]
-}}
-
-NOTE: The "path" field MUST include ALL mount prefixes from app.use(). 
-Example with mount path: If app.use('/v1', router) and router.post('/users'), then path = "/v1/users"
-
-IMPORTANT: Include ALL backend API endpoints you find. Extract REAL field names and types from the code for request_schema and response_schema. If this is frontend-only with no server, return {{"endpoints": []}}.
-
-CRITICAL FOR EXPRESS.JS: Before returning your response, verify that all endpoint paths include their mount prefixes from app.use(). The "path" field must be the COMPLETE URL path that the frontend will call (e.g., /v1/auth/register, NOT /auth/register).
-
-Return ONLY the JSON object, nothing else."""
+Return ONLY this JSON (no markdown):
+{{"endpoints":[{{"file":"","line":1,"method":"GET","path":"/api/x","name":"","description":"","auth_required":false,"auth_type":"","path_parameters":[],"query_parameters":[],"request_schema":{{}},"response_schema":{{}}}}]}}"""
         
         return prompt
     
