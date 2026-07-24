@@ -10,6 +10,11 @@ RUN npm ci
 
 # Copy source and build
 COPY . .
+
+# VITE_API_URL empty = relative URLs, nginx proxies /api/ to backend
+ARG VITE_API_URL=""
+ENV VITE_API_URL=$VITE_API_URL
+
 RUN npm run build
 
 # Stage 2: Serve with nginx
