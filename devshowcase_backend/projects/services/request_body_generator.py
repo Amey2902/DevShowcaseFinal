@@ -90,6 +90,25 @@ class RequestBodyGenerator:
             if schema_body and len(schema_body) > 0:
                 return schema_body
 
+        # 2. AI fallback if schema is absent
+        try:
+            api_key = settings.GROQ_API_KEY
+            if not api_key:
+                return RequestBodyGenerator._generate_fallback_body(endpoint)
+
+            schema_info = ""
+            if endpoint.request_schema:
+                schema_info = f"\n\nRequest Schema:\n{json.dumps(endpoint.request_schema, indent=2)}"
+
+            prompt = f"""Generate a realistic JSON request body for this API endpoint:
+
+Endpoint: {endpoint.name}
+Method: {endpoint.method}
+URL: {endpoint.url}
+Description: {endpoint.description or 'No description'}{schema_info}
+
+Return ONLY valid JSON matching the exact endpoint properties."""
+
             headers = {
                 'Authorization': f'Bearer {api_key}',
                 'Content-Type': 'application/json',
@@ -106,14 +125,13 @@ class RequestBodyGenerator:
                 RequestBodyGenerator.GROQ_API_URL,
                 headers=headers,
                 json=payload,
-                timeout=30
+                timeout=15
             )
             
             if response.status_code == 200:
                 data = response.json()
                 ai_response = data['choices'][0]['message']['content']
                 
-                # Clean up response (remove markdown if present)
                 if '```json' in ai_response:
                     json_start = ai_response.find('```json') + 7
                     json_end = ai_response.find('```', json_start)
@@ -123,11 +141,8 @@ class RequestBodyGenerator:
                     json_end = ai_response.find('```', json_start)
                     ai_response = ai_response[json_start:json_end].strip()
                 
-                # Parse and return
-                request_body = json.loads(ai_response.strip())
-                return request_body
+                return json.loads(ai_response.strip())
             else:
-                print(f"Groq API error: {response.status_code}")
                 return RequestBodyGenerator._generate_fallback_body(endpoint)
                 
         except Exception as e:
