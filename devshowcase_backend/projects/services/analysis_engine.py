@@ -598,9 +598,13 @@ class AnalysisEngine:
             ep['path'] = norm_path
             cleaned_endpoints.append(ep)
             
-        # Deduplicate: if endpoint A path is a suffix of endpoint B path (e.g. /register vs /v1/auth/register),
-        # keep ONLY the full mounted version (/v1/auth/register)!
+        # Deduplicate: merge exact matches, partial route suffixes (e.g. /register vs /v1/auth/register),
+        # and camelCase vs kebab-case variants (e.g. /refreshTokens vs /refresh-tokens)
         final_endpoints = []
+        
+        def canonical_path_key(p):
+            # Strip non-alphanumeric to compare camelCase vs kebab-case identically
+            return re.sub(r'[^a-zA-Z0-9]', '', p).lower()
         
         # Sort by path length descending so longer/full paths come first
         cleaned_endpoints.sort(key=lambda x: len(x['path']), reverse=True)
@@ -608,19 +612,32 @@ class AnalysisEngine:
         for ep in cleaned_endpoints:
             method = ep['method']
             path = ep['path']
+            canon_path = canonical_path_key(path)
             
-            # Check if this endpoint is a partial/shorter version of an already added endpoint
-            is_partial_duplicate = False
+            is_duplicate = False
             for existing in final_endpoints:
                 if existing['method'] == method:
                     ex_path = existing['path']
-                    # Exact match OR path is suffix of full path (e.g. /register is end of /v1/auth/register)
-                    if ex_path == path or (len(path) < len(ex_path) and ex_path.endswith(path)):
-                        is_partial_duplicate = True
+                    ex_canon = canonical_path_key(ex_path)
+                    
+                    # 1. Exact match or camelCase vs kebab-case variant match
+                    if ex_path == path or ex_canon == canon_path:
+                        is_duplicate = True
+                        # Prefer hyphenated kebab-case REST path (e.g. /refresh-tokens over /refreshTokens)
+                        if '-' in path and '-' not in ex_path:
+                            existing['path'] = path
+                            print(f"Dedup: Updated path variant '{ex_path}' -> '{path}'")
+                        else:
+                            print(f"Dedup: Dropped duplicate variant '{method} {path}' in favor of '{method} {ex_path}'")
+                        break
+                        
+                    # 2. Path is suffix of full path (e.g. /register is end of /v1/auth/register)
+                    if len(path) < len(ex_path) and ex_path.endswith(path):
+                        is_duplicate = True
                         print(f"Dedup: Dropped partial endpoint '{method} {path}' in favor of full '{method} {ex_path}'")
                         break
                         
-            if not is_partial_duplicate:
+            if not is_duplicate:
                 final_endpoints.append(ep)
                 
         return final_endpoints
