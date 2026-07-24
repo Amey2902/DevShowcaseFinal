@@ -17,7 +17,7 @@ class AnalysisEngine:
     }
     
     GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
-    GROQ_MODEL = 'llama-3.1-8b-instant'  # Higher token limits on free tier
+    GROQ_MODEL = 'llama-3.1-8b-instant'  # Free tier: 6000 TPM limit (input+output combined)
     
     def __init__(self, upload_instance):
         """Initialize with a ProjectUpload instance."""
@@ -521,36 +521,46 @@ class AnalysisEngine:
         route_files = []
         
         if framework == 'Express.js':
+            # Score each file to find the BEST main server files (not all of them)
+            main_candidates = []
             for file_path in code_files:
                 file_name_lower = file_path.name.lower()
-                # Main server files that typically contain app.use() mount paths
-                # Check both exact names and patterns
-                is_main_file = (
-                    file_name_lower in ['server.js', 'app.js', 'index.js', 'main.js'] or
-                    'server' in file_name_lower or
-                    file_name_lower.endswith('app.js')
-                )
+                score = 0
                 
-                # Also check file content for app.use() patterns (quick check)
-                if not is_main_file:
+                # Exact main file names get highest score
+                if file_name_lower in ['server.js', 'app.js']:
+                    score = 100
+                elif file_name_lower == 'index.js':
+                    # index.js in root or src/ is main; deep nested ones are not
+                    depth = len(file_path.relative_to(file_path.parents[len(file_path.parents)-1]).parts) if file_path.parents else 0
+                    score = 60 if depth <= 3 else 10
+                
+                # Check file content for app.use() mount patterns
+                if score < 80:
                     try:
-                        content = file_path.read_text(encoding='utf-8', errors='ignore')
-                        # If file contains app.use() with route mounting, it's likely a main file
+                        content = file_path.read_text(encoding='utf-8', errors='ignore')[:2000]
                         if 'app.use(' in content and ('router' in content.lower() or 'routes' in content.lower()):
-                            is_main_file = True
+                            score = max(score, 80)
+                        elif 'express()' in content or 'createServer' in content:
+                            score = max(score, 70)
                     except:
                         pass
                 
-                if is_main_file:
-                    main_server_files.append(file_path)
+                if score >= 60:
+                    main_candidates.append((score, file_path))
                 else:
                     route_files.append(file_path)
             
-            # If we found main server files, include them in every batch
+            # Keep only the TOP 2 main server files to avoid bloating every batch
+            main_candidates.sort(key=lambda x: x[0], reverse=True)
+            main_server_files = [f for _, f in main_candidates[:2]]
+            # Put remaining candidates back into route_files
+            route_files.extend([f for _, f in main_candidates[2:]])
+            
             if main_server_files:
                 print(f"Found {len(main_server_files)} main server files (will include in all batches):")
                 for f in main_server_files:
-                    print(f"  - {f.name}")
+                    print(f"  - {f.name} ({f})")
                 code_files_to_batch = route_files
             else:
                 print("No main server files found - analyzing all files normally")
@@ -589,8 +599,10 @@ class AnalysisEngine:
             code_files_to_batch = code_files
         
         # Small batches to stay under 6000 TPM org limit
-        if len(code_files_to_batch) > 6:
-            batch_size = 1  # One route file at a time for complex projects
+        # When main_server_files exist, they're prepended to EVERY batch,
+        # so always use batch_size=1 to keep total tokens low
+        if main_server_files or len(code_files_to_batch) > 4:
+            batch_size = 1  # One route file at a time
         else:
             batch_size = 2  # Two files max per batch
             
@@ -694,10 +706,12 @@ class AnalysisEngine:
         """Build AI prompt for endpoint detection."""
         base = Path(base_path)
         
-        # Token budget: org limit 6000 TPM, ~4 chars/token
-        # Compact prompt template ~500 tokens, leaving ~5500 tokens = ~22000 chars for code
-        MAX_CODE_CHARS = 8000
-        MAX_CHARS_PER_FILE = 2000
+        # Token budget: Groq free tier = 6000 TPM (input+output combined)
+        # We set max_tokens=2500 for output, leaving ~3500 tokens for input
+        # ~4 chars/token → ~14000 chars for input, but prompt template uses ~700 chars
+        # So code budget ≈ 3500 chars to be safe (tokens vary by content)
+        MAX_CODE_CHARS = 3500
+        MAX_CHARS_PER_FILE = 1000
         
         code_snippets = []
         total_chars = 0
@@ -935,7 +949,7 @@ Return ONLY this JSON (no markdown):
                 {'role': 'user', 'content': prompt}
             ],
             'temperature': 0.1,
-            'max_tokens': 8000,  # Increased to handle more endpoints in response
+            'max_tokens': 2500,  # Keep low: Groq free tier = 6000 TPM (input+output)
         }
         
         for attempt in range(max_retries):
@@ -962,9 +976,10 @@ Return ONLY this JSON (no markdown):
                     time.sleep(wait_time)
                     continue
                 elif response.status_code in (400, 413):
-                    # Prompt too large - no point retrying
+                    # Prompt too large - deterministic failure, don't retry
                     print(f"Prompt too large ({response.status_code}): {response.text[:200]}")
-                    raise ValueError("Prompt too large. Try uploading a smaller project or fewer files.")
+                    # Return empty rather than raising - let other batches continue
+                    return '{"endpoints":[]}'
                 else:
                     print(f"Groq API error: {response.status_code} - {response.text}")
                     raise ValueError(f"Groq API error: {response.status_code}")

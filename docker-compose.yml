@@ -26,6 +26,8 @@ services:
       dockerfile: Dockerfile
     container_name: devshowcase_backend
     restart: always
+    env_file:
+      - ./devshowcase_backend/.env
     environment:
       SECRET_KEY: ${SECRET_KEY}
       DEBUG: "False"
