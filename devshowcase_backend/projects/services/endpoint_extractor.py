@@ -2,6 +2,24 @@ import re
 from projects.models import Endpoint
 
 
+def auto_name_from_path(method, path):
+    """Generate a readable endpoint name from HTTP method + path when AI returns no name."""
+    # Strip path params like {userId} or :userId
+    segments = [s for s in path.split('/') if s and not s.startswith('{') and not s.startswith(':') and not s.startswith('<')]
+    # Skip version prefixes like v1, v2, api
+    segments = [s for s in segments if not re.match(r'^(v\d+|api)$', s, re.IGNORECASE)]
+    if not segments:
+        return f"{method.capitalize()} Endpoint"
+    # Title-case the last meaningful segment (e.g. 'auth' -> 'Auth', 'refresh-tokens' -> 'Refresh Tokens')
+    last = segments[-1].replace('-', ' ').replace('_', ' ').title()
+    # Use second-to-last as context prefix if available and not same
+    if len(segments) >= 2:
+        prefix = segments[-2].replace('-', ' ').replace('_', ' ').title()
+        if prefix.lower() != last.lower():
+            return f"{prefix} {last}"
+    return last
+
+
 def normalize_path_params(path):
     """
     Normalize path parameter formats to {param} style.
@@ -74,7 +92,11 @@ class EndpointExtractor:
                         path = endpoint_data.get('path', '')
                         # Normalize path parameter formats to {param} style
                         path = normalize_path_params(path)
-                        name = endpoint_data.get('name', f"{method} {path}")
+                        name = endpoint_data.get('name', '') or ''
+                        name = name.strip()
+                        # Auto-generate a clean name if AI left it empty or used a bad default
+                        if not name or name.lower() in ['get', 'post', 'put', 'patch', 'delete', 'unknown', 'endpoint', 'api']:
+                            name = auto_name_from_path(method, path)
 
                         # Handle both full URLs and relative paths
                         if path.startswith('http://') or path.startswith('https://'):

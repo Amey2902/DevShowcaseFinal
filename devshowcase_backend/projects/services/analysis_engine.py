@@ -694,12 +694,13 @@ Rules:
 - Combine mount paths: app.use('/v1', routes) + router.use('/auth', authRoute) + router.post('/register') = full path '/v1/auth/register'
 - Include path params (:id, :userId) in both path field and path_parameters array
 - Use only standard HTTP methods: GET POST PUT DELETE PATCH
+- The "name" field MUST be a short human-readable label (e.g. "Register User", "Get User", "Refresh Tokens", "Forgot Password"). NEVER leave it empty or use raw method names.
 
 Code:
 {code_text}
 
 Return ONLY this JSON (no markdown):
-{{"endpoints":[{{"file":"","line":1,"method":"GET","path":"/v1/example","name":"","description":"","auth_required":false,"auth_type":"","path_parameters":[],"query_parameters":[],"request_schema":{{}},"response_schema":{{}}}}]}}"""
+{{"endpoints":[{{"file":"","line":1,"method":"GET","path":"/v1/example","name":"Get Example","description":"","auth_required":false,"auth_type":"","path_parameters":[],"query_parameters":[],"request_schema":{{}},"response_schema":{{}}}}]}}"""
         
         return prompt
     
