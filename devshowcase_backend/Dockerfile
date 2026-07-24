@@ -4,10 +4,11 @@ FROM python:3.11-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies (needed for psycopg2-binary and cryptography)
+# Install system dependencies (needed for psycopg2-binary, cryptography, and git)
 RUN apt-get update && apt-get install -y \
     gcc \
     libpq-dev \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies (includes gunicorn, whitenoise, dj-database-url)
