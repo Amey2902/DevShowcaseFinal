@@ -213,7 +213,7 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId, liveBaseUrl = ''
     setTranslationError('')
 
     try {
-      const response = await axios.post(`http://127.0.0.1:8000/api/projects/${projectId}/translate/`, {
+      const response = await axios.post(`/api/projects/${projectId}/translate/`, {
         target_framework: selectedFramework
       }, {
         headers: {

@@ -13,7 +13,7 @@ const TestPage = () => {
   const testConnection = async () => {
     try {
       // Test 1: Basic backend connection
-      const response = await axios.get('http://127.0.0.1:8000/api/auth/me/')
+      const response = await axios.get('/api/auth/me/')
       setBackendStatus('Backend reachable (401 expected)')
     } catch (error) {
       if (error.response?.status === 401) {
@@ -23,9 +23,8 @@ const TestPage = () => {
       }
     }
 
-    // Test 2: Magic link endpoint
     try {
-      const response = await axios.post('http://127.0.0.1:8000/api/auth/magic-link/request/', {
+      const response = await axios.post('/api/auth/magic-link/request/', {
         email: 'test@example.com'
       })
       setMagicLinkTest('✅ Magic link endpoint working')

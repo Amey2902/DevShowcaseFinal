@@ -18,7 +18,7 @@ const MagicLinkVerify = () => {
 
   const verifyToken = async () => {
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
+      const API_URL = import.meta.env.VITE_API_URL || ''
       const response = await axios.post(`${API_URL}/api/auth/magic-link/verify/`, { token })
       
       // Log user in

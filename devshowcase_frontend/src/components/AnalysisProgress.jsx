@@ -12,7 +12,7 @@ const AnalysisProgress = ({ uploadId, onComplete }) => {
     if (!uploadId || !polling) return
     const pollStatus = async () => {
       try {
-        const res = await fetch(`http://127.0.0.1:8000/api/uploads/${uploadId}/status/`, {
+        const res = await fetch(`/api/uploads/${uploadId}/status/`, {
           headers: { 'Authorization': `Token ${localStorage.getItem('token')}` },
         })
         if (res.ok) {

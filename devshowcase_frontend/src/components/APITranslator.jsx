@@ -24,7 +24,7 @@ const APITranslator = ({ projectId, endpoints }) => {
     setError('')
 
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/projects/${projectId}/translate/`, {
+      const response = await fetch(`/api/projects/${projectId}/translate/`, {
         method: 'POST',
         headers: {
           'Authorization': `Token ${localStorage.getItem('token')}`,

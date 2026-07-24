@@ -32,7 +32,7 @@ const MagicLinkLogin = () => {
     if (!email) { toast.error('Please enter your email'); return }
     setLoading(true)
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
+      const API_URL = import.meta.env.VITE_API_URL || ''
       console.log('Sending magic link request to:', `${API_URL}/api/auth/magic-link/request/`)
       console.log('Email:', email)
       

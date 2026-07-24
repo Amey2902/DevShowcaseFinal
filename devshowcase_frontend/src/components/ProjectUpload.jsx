@@ -130,7 +130,7 @@ const ProjectUpload = ({ projectId, onUploadStart }) => {
     })
     formData.append('generate_architecture', generateArchitecture) // Add architecture generation flag
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/projects/${projectId}/upload/files/`, {
+      const res = await fetch(`/api/projects/${projectId}/upload/files/`, {
         method: 'POST',
         headers: { 'Authorization': `Token ${localStorage.getItem('token')}` },
         body: formData,
@@ -149,7 +149,7 @@ const ProjectUpload = ({ projectId, onUploadStart }) => {
     formData.append('file', selectedFile)
     formData.append('generate_architecture', generateArchitecture) // Add architecture generation flag
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/projects/${projectId}/upload/zip/`, {
+      const res = await fetch(`/api/projects/${projectId}/upload/zip/`, {
         method: 'POST',
         headers: { 'Authorization': `Token ${localStorage.getItem('token')}` },
         body: formData,
@@ -165,7 +165,7 @@ const ProjectUpload = ({ projectId, onUploadStart }) => {
     if (!githubUrl) { setError('Please enter a GitHub URL'); return }
     setUploading(true); setError('')
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/projects/${projectId}/upload/github/`, {
+      const res = await fetch(`/api/projects/${projectId}/upload/github/`, {
         method: 'POST',
         headers: { 'Authorization': `Token ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
