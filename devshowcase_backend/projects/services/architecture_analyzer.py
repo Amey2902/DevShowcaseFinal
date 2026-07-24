@@ -317,7 +317,7 @@ class ArchitectureAnalyzer:
         """Identify frontend components from files."""
         components = []
         
-        # Look for React components
+        # Look for React components (.jsx/.tsx with component pattern)
         react_files = [f for f in files if f.suffix in ['.jsx', '.tsx'] and 'component' in str(f).lower()]
         if react_files:
             components.append(ArchitecturalComponent(
@@ -359,22 +359,30 @@ class ArchitectureAnalyzer:
                 suggested_position=(200, 100)
             ))
         
-        # Generic frontend detection
+        # Generic frontend detection — ONLY when actual HTML files exist in a dedicated
+        # frontend directory (public/, static/, client/, frontend/, views/ with html files)
+        # Do NOT trigger on plain .js files from a Node/Express backend
         if not components:
-            frontend_files = [f for f in files if f.suffix in ['.html', '.css', '.js'] and 'static' not in str(f)]
-            if frontend_files:
+            frontend_dirs = ['public', 'static', 'client', 'frontend', 'web', 'assets', 'views']
+            html_files = [
+                f for f in files
+                if f.suffix == '.html'
+                and any(d in str(f).lower().replace('\\', '/') for d in frontend_dirs)
+            ]
+            if html_files:
                 components.append(ArchitecturalComponent(
                     name="Web Frontend",
                     component_type=ComponentType.FRONTEND,
                     technology="HTML/CSS/JS",
                     description="Web-based user interface",
                     confidence_score=0.7,
-                    source_files=[str(f) for f in frontend_files[:5]],
+                    source_files=[str(f) for f in html_files[:5]],
                     dependencies=[],
                     suggested_position=(200, 100)
                 ))
         
         return components
+
     
     def _identify_backend_components(self, files: List[Path]) -> List[ArchitecturalComponent]:
         """Identify backend components from files."""
