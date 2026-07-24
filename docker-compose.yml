@@ -1,0 +1,58 @@
+version: "3.9"
+
+services:
+
+  # ── PostgreSQL Database ────────────────────────────────────────────────────
+  db:
+    image: postgres:15-alpine
+    container_name: devshowcase_db
+    restart: always
+    environment:
+      POSTGRES_DB: devshowcase
+      POSTGRES_USER: devshowcase_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U devshowcase_user -d devshowcase"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Django Backend ─────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./devshowcase_backend
+      dockerfile: Dockerfile
+    container_name: devshowcase_backend
+    restart: always
+    environment:
+      SECRET_KEY: ${SECRET_KEY}
+      DEBUG: "False"
+      DATABASE_URL: postgres://devshowcase_user:${DB_PASSWORD}@db:5432/devshowcase
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD}
+      FRONTEND_URL: ${FRONTEND_URL}
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "8000"
+
+  # ── React Frontend (nginx) ─────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./devshowcase_frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ""   # nginx proxies /api/ internally, no need for absolute URL
+    container_name: devshowcase_frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:

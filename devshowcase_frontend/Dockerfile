@@ -21,10 +21,6 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # Copy custom nginx config (handles SPA routing)
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Railway injects $PORT — use an entrypoint script to substitute it
-COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
-
 EXPOSE 80
 
-CMD ["/docker-entrypoint.sh"]
+CMD ["nginx", "-g", "daemon off;"]
