@@ -461,54 +461,54 @@ class AnalysisEngine:
                     
                     code_files.append(file_path)
         
-        # Enhanced prioritization for complex projects
-        priority_keywords = [
-            # High priority - main route files
-            'route', 'router', 'api', 'endpoint', 'controller', 'handler',
-            # Medium priority - framework specific
-            'app', 'server', 'index', 'main',
-            # Low priority - but still important
-            'view', 'urls', 'middleware'
-        ]
+        # Classify files: route files vs non-route files
+        route_keywords = ['route', 'router', 'urls', 'api', 'endpoint']
+        main_app_keywords = ['app.js', 'app.ts', 'server.js', 'server.ts', 'main.js', 'main.ts', 'index.js', 'index.ts', 'main.py', 'app.py', 'wsgi.py', 'asgi.py']
+        exclude_keywords = ['controller', 'service', 'model', 'validation', 'middleware', 'util', 'helper', 'dto', 'config', 'test', 'spec', 'schema']
         
-        def enhanced_priority_score(file_path):
-            name_lower = str(file_path).lower()
-            score = 0
+        primary_route_files = []
+        app_entry_files = []
+        other_code_files = []
+        
+        for file_path in code_files:
+            file_name_lower = file_path.name.lower()
+            str_path_lower = str(file_path).lower()
             
-            # Boost for route-related files
-            for i, keyword in enumerate(priority_keywords):
-                if keyword in name_lower:
-                    score += (len(priority_keywords) - i) * 10
-            
-            # Boost for files in route/api directories
-            if any(dir_name in name_lower for dir_name in ['route', 'api', 'controller', 'handler']):
-                score += 50
-            
-            # Boost for main application files
-            if any(main_file in file_path.name.lower() for main_file in ['app.js', 'server.js', 'index.js', 'main.js']):
-                score += 30
+            # Check if explicitly excluded (e.g. controllers, services, models, validations)
+            # Exception: NestJS / ASP.NET use controllers for routes, so don't exclude controllers for typescript/csharp
+            is_excluded = False
+            if language not in ['typescript', 'csharp']:
+                if any(ex in str_path_lower for ex in exclude_keywords):
+                    is_excluded = True
+            elif any(ex in str_path_lower for ex in ['service', 'model', 'validation', 'middleware', 'util', 'helper', 'dto', 'config', 'test', 'spec']):
+                is_excluded = True
                 
-            # Penalty for deeply nested files (likely less important)
-            depth = len(file_path.parts)
-            if depth > 6:
-                score -= (depth - 6) * 5
+            if is_excluded:
+                continue
+                
+            if any(rk in str_path_lower for rk in route_keywords):
+                primary_route_files.append(file_path)
+            elif any(file_name_lower == mk or file_name_lower.endswith(mk) for mk in main_app_keywords):
+                app_entry_files.append(file_path)
+            else:
+                other_code_files.append(file_path)
+        
+        # Priority: primary route files + app entry files
+        selected_files = primary_route_files + app_entry_files
+        
+        # If no route/app files were found, fallback to other code files
+        if not selected_files:
+            selected_files = other_code_files
             
-            return score
+        # Limit to top 10 route files maximum
+        selected_files = selected_files[:10]
         
-        # Sort by enhanced priority
-        code_files.sort(key=enhanced_priority_score, reverse=True)
-        
-        # For complex projects, analyze more files but in smaller batches
-        max_files = 12 if len(code_files) > 20 else 8
-        selected_files = code_files[:max_files]
-        
-        print(f"=== File Selection Debug ===")
-        print(f"Total code files found: {len(code_files)}")
-        print(f"Selected top {len(selected_files)} files:")
+        print(f"=== Route File Selection Debug ===")
+        print(f"Total code files scanned: {len(code_files)}")
+        print(f"Selected {len(selected_files)} route/entry files for endpoint extraction:")
         for i, file_path in enumerate(selected_files):
-            score = enhanced_priority_score(file_path)
-            print(f"  {i+1}. {file_path.name} (score: {score}) - {file_path}")
-        print(f"=== End File Selection ===")
+            print(f"  {i+1}. {file_path.name} - {file_path}")
+        print(f"=== End Route File Selection ===")
         
         return selected_files
     
@@ -516,202 +516,83 @@ class AnalysisEngine:
         """Use Groq AI to analyze code and find endpoints."""
         all_endpoints = []
         
-        # For Express.js and Django, identify main files that contain mount paths/includes
-        main_server_files = []
-        route_files = []
-        
-        if framework == 'Express.js':
-            # Score each file to find the BEST main server files (not all of them)
-            main_candidates = []
-            for file_path in code_files:
-                file_name_lower = file_path.name.lower()
-                score = 0
+        # Check total character count of all selected route files combined
+        total_route_chars = 0
+        for f in code_files:
+            try:
+                total_route_chars += len(f.read_text(encoding='utf-8', errors='ignore'))
+            except:
+                pass
                 
-                # Exact main file names get highest score
-                if file_name_lower in ['server.js', 'app.js']:
-                    score = 100
-                elif file_name_lower == 'index.js':
-                    # index.js in root or src/ is main; deep nested ones are not
-                    depth = len(file_path.relative_to(file_path.parents[len(file_path.parents)-1]).parts) if file_path.parents else 0
-                    score = 60 if depth <= 3 else 10
-                
-                # Check file content for app.use() mount patterns
-                if score < 80:
-                    try:
-                        content = file_path.read_text(encoding='utf-8', errors='ignore')[:2000]
-                        if 'app.use(' in content and ('router' in content.lower() or 'routes' in content.lower()):
-                            score = max(score, 80)
-                        elif 'express()' in content or 'createServer' in content:
-                            score = max(score, 70)
-                    except:
-                        pass
-                
-                if score >= 60:
-                    main_candidates.append((score, file_path))
-                else:
-                    route_files.append(file_path)
-            
-            # Keep only the TOP 2 main server files to avoid bloating every batch
-            main_candidates.sort(key=lambda x: x[0], reverse=True)
-            main_server_files = [f for _, f in main_candidates[:2]]
-            # Put remaining candidates back into route_files
-            route_files.extend([f for _, f in main_candidates[2:]])
-            
-            if main_server_files:
-                print(f"Found {len(main_server_files)} main server files (will include in all batches):")
-                for f in main_server_files:
-                    print(f"  - {f.name} ({f})")
-                code_files_to_batch = route_files
-            else:
-                print("No main server files found - analyzing all files normally")
-                code_files_to_batch = code_files
-        
-        elif framework == 'Django':
-            for file_path in code_files:
-                file_name_lower = file_path.name.lower()
-                # Main urls.py files that typically contain include() patterns
-                is_main_urls = file_name_lower == 'urls.py'
-                
-                if is_main_urls:
-                    try:
-                        content = file_path.read_text(encoding='utf-8', errors='ignore')
-                        # Check if it's a main urls.py with include() statements
-                        if 'include(' in content:
-                            main_server_files.append(file_path)
-                        else:
-                            route_files.append(file_path)
-                    except:
-                        route_files.append(file_path)
-                else:
-                    route_files.append(file_path)
-            
-            # If we found main urls.py files, include them in every batch
-            if main_server_files:
-                print(f"Found {len(main_server_files)} main Django urls.py files (will include in all batches):")
-                for f in main_server_files:
-                    print(f"  - {f}")
-                code_files_to_batch = route_files
-            else:
-                print("No main Django urls.py files found - analyzing all files normally")
-                code_files_to_batch = code_files
-        
-        else:
-            code_files_to_batch = code_files
-        
-        # Small batches to stay under 6000 TPM org limit
-        # When main_server_files exist, they're prepended to EVERY batch,
-        # so always use batch_size=1 to keep total tokens low
-        if main_server_files or len(code_files_to_batch) > 4:
-            batch_size = 1  # One route file at a time
-        else:
-            batch_size = 2  # Two files max per batch
-            
-        total_batches = (len(code_files_to_batch) + batch_size - 1) // batch_size
-        
         print(f"=== AI Analysis Strategy ===")
-        print(f"Total files to analyze: {len(code_files)}")
-        print(f"Batch size: {batch_size}")
-        print(f"Total batches: {total_batches}")
-        print(f"=== Starting Analysis ===")
+        print(f"Total route files: {len(code_files)}")
+        print(f"Total combined size: {total_route_chars} characters")
+        
+        # If all route files combined fit in a single prompt (<= 6000 chars), analyze them ALL AT ONCE!
+        # This allows AI to see complete app.use('/v1', routes) -> router.use('/auth', authRoute) -> router.post('/register') hierarchy!
+        if total_route_chars <= 6000 or len(code_files) <= 6:
+            print("Analyzing ALL route files together in 1 single pass for complete mount hierarchy!")
+            prompt = self.build_ai_prompt(code_files, framework, base_path)
+            response = self._call_groq_ai_safely(prompt)
+            all_endpoints = self.parse_ai_response(response, framework)
+            
+            self.upload.progress_percentage = 80
+            self.upload.current_message = f'AI analysis complete. Found {len(all_endpoints)} endpoints.'
+            self.upload.save()
+            
+            return self._deduplicate_endpoints(all_endpoints)
+            
+        # Fallback to batching if total size is very large
+        batch_size = 2
+        total_batches = (len(code_files) + batch_size - 1) // batch_size
         
         for batch_num in range(total_batches):
             start_idx = batch_num * batch_size
-            end_idx = min(start_idx + batch_size, len(code_files_to_batch))
-            batch_files = code_files_to_batch[start_idx:end_idx]
-            
-            # For Express.js and Django, prepend main files to each batch
-            if (framework == 'Express.js' or framework == 'Django') and main_server_files:
-                batch_files = main_server_files + batch_files
+            end_idx = min(start_idx + batch_size, len(code_files))
+            batch_files = code_files[start_idx:end_idx]
             
             try:
                 print(f"=== Batch {batch_num + 1}/{total_batches} ===")
-                print(f"Files in this batch:")
-                for f in batch_files:
-                    print(f"  - {f.name}")
-                
-                # Build prompt for this batch
                 prompt = self.build_ai_prompt(batch_files, framework, base_path)
-                
-                # Call Groq AI with retry logic
                 response = self._call_groq_ai_safely(prompt)
-                
-                # Parse response
                 endpoints = self.parse_ai_response(response, framework)
-                
-                print(f"Found {len(endpoints)} endpoints in batch {batch_num + 1}")
-                if endpoints:
-                    print("Endpoints found:")
-                    for ep in endpoints[:3]:  # Show first 3
-                        print(f"  - {ep.get('method', 'GET')} {ep.get('path', 'unknown')}")
-                    if len(endpoints) > 3:
-                        print(f"  ... and {len(endpoints) - 3} more")
-                
                 all_endpoints.extend(endpoints)
                 
-                # Update progress
-                progress = 70 + int((batch_num + 1) / total_batches * 9)
-                self.upload.progress_percentage = progress
-                self.upload.current_message = f'Analyzed batch {batch_num + 1}/{total_batches}, found {len(all_endpoints)} endpoints so far'
-                self.upload.save()
-                
-                # Wait between batches to avoid rate limiting (except for last batch)
                 if batch_num < total_batches - 1:
-                    wait_time = 62  # Wait full 62s to let Groq's 60s TPM window reset
-                    print(f"Waiting {wait_time} seconds before next batch (TPM reset)...")
-                    time.sleep(wait_time)
-                
-            except ValueError as e:
-                # Log error but continue with other batches
-                print(f"Error analyzing batch {batch_num + 1}: {str(e)}")
+                    time.sleep(30)
+            except Exception as e:
+                print(f"Error in batch {batch_num + 1}: {e}")
                 continue
+                
+        return self._deduplicate_endpoints(all_endpoints)
         
-        print(f"=== Analysis Complete ===")
-        print(f"Total endpoints found before dedup: {len(all_endpoints)}")
-        
-        # Deduplicate: if same method+path exists with and without version prefix,
-        # keep only the versioned one (e.g. /v1/auth/login wins over /auth/login)
+    def _deduplicate_endpoints(self, all_endpoints):
+        """Deduplicate endpoints by method + normalized path."""
         import re
-        VERSION_PREFIX_RE = re.compile(r'^(/v\d+(?:\.\d+)?)(/.+)$')
-        
-        def strip_version(path):
-            """Return path without leading version prefix."""
-            m = VERSION_PREFIX_RE.match(path)
-            return m.group(2) if m else path
-        
-        # Group by method + stripped path, prefer versioned paths
-        seen = {}  # key: "METHOD:stripped_path" → endpoint dict
+        seen = {}
         for ep in all_endpoints:
             method = ep.get('method', 'GET').upper()
             path = ep.get('path', '')
-            stripped = strip_version(path)
-            key = f"{method}:{stripped}"
+            if not path or not path.startswith('/'):
+                path = '/' + path
             
+            key = f"{method}:{path}"
             if key not in seen:
                 seen[key] = ep
             else:
-                # Prefer the versioned path over the unversioned one
-                existing_path = seen[key].get('path', '')
-                if VERSION_PREFIX_RE.match(path) and not VERSION_PREFIX_RE.match(existing_path):
+                # Keep the one with more description or schema info
+                if len(str(ep)) > len(str(seen[key])):
                     seen[key] = ep
-                    print(f"Dedup: replaced {existing_path} with {path}")
-                else:
-                    print(f"Dedup: skipped duplicate {path} (keeping {existing_path})")
-        
-        all_endpoints = list(seen.values())
-        print(f"Total endpoints after dedup: {len(all_endpoints)}")
-        
-        return all_endpoints
+                    
+        return list(seen.values())
     
     def build_ai_prompt(self, code_files, framework, base_path):
         """Build AI prompt for endpoint detection."""
         base = Path(base_path)
         
-        # Token budget: Groq free tier = 6000 TPM (input+output combined)
-        # We set max_tokens=2500 for output, leaving ~3500 tokens for input
-        # ~4 chars/token → ~14000 chars for input, but prompt template uses ~700 chars
-        # So code budget ≈ 3500 chars to be safe (tokens vary by content)
-        MAX_CODE_CHARS = 3500
-        MAX_CHARS_PER_FILE = 1000
+        # Token budget: Max 4500 chars code for input
+        MAX_CODE_CHARS = 4500
+        MAX_CHARS_PER_FILE = 2000
         
         code_snippets = []
         total_chars = 0
