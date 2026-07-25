@@ -5,7 +5,6 @@ import axios from 'axios'
 import { toast } from 'react-toastify'
 import OverviewTab from '../components/editor/OverviewTab'
 import TechStackTab from '../components/editor/TechStackTab'
-import ArchitectureTab from '../components/editor/ArchitectureTab'
 import EndpointsTab from '../components/editor/EndpointsTab'
 import TimelineTab from '../components/editor/TimelineTab'
 import PublishTab from '../components/editor/PublishTab'
@@ -33,7 +32,6 @@ const ProjectEdit = () => {
   const tabs = [
     { id: 'overview', label: 'Overview', icon: '📋' },
     { id: 'techstack', label: 'Tech Stack', icon: '🛠' },
-    { id: 'architecture', label: 'Architecture', icon: '🏗' },
     { id: 'endpoints', label: 'Endpoints', icon: '🔌' },
     { id: 'upload', label: 'Auto-Detect', icon: '🤖' },
     { id: 'translate', label: 'Translate API', icon: '🔄' },
@@ -144,7 +142,6 @@ const ProjectEdit = () => {
           >
             {activeTab === 'overview' && <OverviewTab project={project} onUpdate={fetchProject} />}
             {activeTab === 'techstack' && <TechStackTab project={project} onUpdate={fetchProject} />}
-            {activeTab === 'architecture' && <ArchitectureTab project={project} onUpdate={fetchProject} />}
             {activeTab === 'endpoints' && <EndpointsTab project={project} onUpdate={fetchProject} />}
             {activeTab === 'upload' && (
               !uploadId ? (

@@ -9,7 +9,6 @@ const ProjectUpload = ({ projectId, onUploadStart }) => {
   const [isDragging, setIsDragging] = useState(false)
   const [error, setError] = useState('')
   const [uploading, setUploading] = useState(false)
-  const [generateArchitecture, setGenerateArchitecture] = useState(true) // New state for architecture generation
 
   const handleFileSelect = (e) => {
     const file = e.target.files[0]
@@ -170,7 +169,6 @@ const ProjectUpload = ({ projectId, onUploadStart }) => {
         headers: { 'Authorization': `Token ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           github_url: githubUrl,
-          generate_architecture: generateArchitecture // Add architecture generation flag
         }),
       })
       const data = await res.json()
@@ -401,52 +399,6 @@ const ProjectUpload = ({ projectId, onUploadStart }) => {
         )}
       </AnimatePresence>
 
-      {/* Architecture Generation Option */}
-      <div style={{
-        marginTop: '1.5rem',
-        padding: '1.25rem',
-        background: 'rgba(59,130,246,0.06)',
-        border: '1px solid rgba(59,130,246,0.18)',
-        borderRadius: 'var(--radius-lg)',
-      }}>
-        <label style={{ 
-          display: 'flex', 
-          alignItems: 'flex-start', 
-          gap: '0.75rem', 
-          cursor: 'pointer',
-          fontSize: '0.9rem',
-          lineHeight: 1.6
-        }}>
-          <input
-            type="checkbox"
-            checked={generateArchitecture}
-            onChange={(e) => setGenerateArchitecture(e.target.checked)}
-            style={{
-              width: '18px',
-              height: '18px',
-              marginTop: '2px',
-              accentColor: 'var(--accent-primary)',
-              cursor: 'pointer'
-            }}
-          />
-          <div>
-            <div style={{ 
-              color: 'var(--text-primary)', 
-              fontWeight: 600,
-              marginBottom: '0.25rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem'
-            }}>
-              <span>🏗️</span>
-              Generate Architecture Diagram
-            </div>
-            <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-              Let AI automatically analyze your codebase and create an interactive architecture diagram showing components, databases, and services. You can edit and customize it afterwards.
-            </div>
-          </div>
-        </label>
-      </div>
 
       {/* Submit button */}
       <motion.button
