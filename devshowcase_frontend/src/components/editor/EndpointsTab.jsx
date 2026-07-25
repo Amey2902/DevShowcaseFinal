@@ -47,6 +47,10 @@ const EndpointsTab = ({ project, onUpdate }) => {
   const [formData, setFormData] = useState({
     name: '', method: 'GET', url: '', headers: '{}', sample_body: '{}', description: '',
   })
+  const [editingEndpointId, setEditingEndpointId] = useState(null)
+  const [editFormData, setEditFormData] = useState({
+    name: '', method: 'GET', url: '', description: '', headers: '{}', sample_body: '{}', request_schema: '{}'
+  })
 
   // Debug logging
   console.log('EndpointsTab - project:', project)
@@ -63,6 +67,49 @@ const EndpointsTab = ({ project, onUpdate }) => {
         <p style={{ marginTop: '1rem', color: 'var(--text-muted)' }}>Loading endpoints...</p>
       </div>
     )
+  }
+
+  const handleStartEdit = (endpoint) => {
+    setEditingEndpointId(endpoint.id)
+    setEditFormData({
+      name: endpoint.name || '',
+      method: endpoint.method || 'GET',
+      url: endpoint.url || '',
+      description: endpoint.description || '',
+      headers: JSON.stringify(endpoint.headers || {}, null, 2),
+      sample_body: JSON.stringify(endpoint.sample_body || {}, null, 2),
+      request_schema: JSON.stringify(endpoint.request_schema || {}, null, 2),
+    })
+  }
+
+  const handleCancelEdit = () => {
+    setEditingEndpointId(null)
+  }
+
+  const handleSaveEdit = async (endpointId) => {
+    try {
+      let parsedHeaders = {}
+      let parsedSampleBody = {}
+      let parsedRequestSchema = {}
+      try { parsedHeaders = JSON.parse(editFormData.headers) } catch { return toast.error('Invalid JSON in headers') }
+      try { parsedSampleBody = JSON.parse(editFormData.sample_body) } catch { return toast.error('Invalid JSON in sample body') }
+      try { parsedRequestSchema = JSON.parse(editFormData.request_schema) } catch { return toast.error('Invalid JSON in request schema') }
+
+      await axios.patch(`/api/endpoints/${endpointId}/update/`, {
+        name: editFormData.name,
+        method: editFormData.method,
+        url: editFormData.url,
+        description: editFormData.description,
+        headers: parsedHeaders,
+        sample_body: parsedSampleBody,
+        request_schema: parsedRequestSchema,
+      })
+      toast.success('Endpoint updated successfully')
+      setEditingEndpointId(null)
+      onUpdate()
+    } catch (error) {
+      toast.error(error.response?.data?.url?.[0] || error.response?.data?.error || 'Failed to update endpoint')
+    }
   }
 
   const handleSubmit = async (e) => {
@@ -250,16 +297,83 @@ const EndpointsTab = ({ project, onUpdate }) => {
                     fontWeight: 700,
                   }}>🔒 Auth Required</span>
                 )}
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => handleDelete(endpoint.id)}
-                  className="btn btn-danger"
-                  style={{ marginLeft: 'auto', padding: '0.35rem 0.875rem', fontSize: '0.8rem' }}
-                >
-                  🗑 Delete
-                </motion.button>
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem' }}>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => handleStartEdit(endpoint)}
+                    className="btn btn-secondary"
+                    style={{ padding: '0.35rem 0.875rem', fontSize: '0.8rem' }}
+                  >
+                    ✏ Edit
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => handleDelete(endpoint.id)}
+                    className="btn btn-danger"
+                    style={{ padding: '0.35rem 0.875rem', fontSize: '0.8rem' }}
+                  >
+                    🗑 Delete
+                  </motion.button>
+                </div>
               </div>
+
+              {/* Inline Edit Form */}
+              {editingEndpointId === endpoint.id ? (
+                <div style={{
+                  padding: '1.25rem',
+                  background: 'var(--bg-tertiary)',
+                  border: '1px solid var(--accent-primary)',
+                  borderRadius: 'var(--radius-md)',
+                  marginTop: '1rem',
+                  marginBottom: '1rem',
+                }}>
+                  <h4 style={{ margin: '0 0 1rem 0', fontSize: '1rem', color: 'var(--accent-primary)', fontWeight: 700 }}>
+                    ✏ Edit Endpoint: {endpoint.name}
+                  </h4>
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <label className="form-label">Endpoint Name</label>
+                    <input type="text" className="form-input" value={editFormData.name} onChange={e => setEditFormData({ ...editFormData, name: e.target.value })} required />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <label className="form-label">HTTP Method</label>
+                    <select className="form-select" value={editFormData.method} onChange={e => setEditFormData({ ...editFormData, method: e.target.value })}
+                      style={{ color: methodColor[editFormData.method] || 'var(--text-primary)', fontWeight: 700 }}>
+                      {['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <label className="form-label">URL Path</label>
+                    <input type="text" className="form-input" value={editFormData.url} onChange={e => setEditFormData({ ...editFormData, url: e.target.value })} required />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <label className="form-label">Description</label>
+                    <textarea className="form-textarea" rows={2} value={editFormData.description} onChange={e => setEditFormData({ ...editFormData, description: e.target.value })} />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <label className="form-label">Sample Request Body (JSON)</label>
+                    <textarea className="form-textarea code-textarea" rows={4} value={editFormData.sample_body} onChange={e => setEditFormData({ ...editFormData, sample_body: e.target.value })} />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <label className="form-label">Request Schema (JSON)</label>
+                    <textarea className="form-textarea code-textarea" rows={4} value={editFormData.request_schema} onChange={e => setEditFormData({ ...editFormData, request_schema: e.target.value })} />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: '1rem' }}>
+                    <label className="form-label">Headers (JSON)</label>
+                    <textarea className="form-textarea code-textarea" rows={2} value={editFormData.headers} onChange={e => setEditFormData({ ...editFormData, headers: e.target.value })} />
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
+                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => handleSaveEdit(endpoint.id)} className="btn btn-primary" style={{ padding: '0.5rem 1.25rem' }}>
+                      💾 Save Changes
+                    </motion.button>
+                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={handleCancelEdit} className="btn btn-secondary" style={{ padding: '0.5rem 1.25rem' }}>
+                      Cancel
+                    </motion.button>
+                  </div>
+                </div>
+              ) : (
+                <>
 
               {/* URL */}
               <div style={{
@@ -422,6 +536,7 @@ const EndpointsTab = ({ project, onUpdate }) => {
                   )}
                 </div>
               )}
+              </>
             </motion.div>
           ))
         )}

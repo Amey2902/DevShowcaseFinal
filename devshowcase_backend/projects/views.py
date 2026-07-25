@@ -185,6 +185,24 @@ def endpoint_delete(request, endpoint_id):
         return Response({'error': 'Endpoint not found'}, status=status.HTTP_404_NOT_FOUND)
 
 
+@api_view(['PUT', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def endpoint_update(request, endpoint_id):
+    """Update an existing endpoint's details (request_schema, sample_body, method, url, name, etc.)."""
+    try:
+        endpoint = Endpoint.objects.select_related('project').get(id=endpoint_id)
+        if endpoint.project.owner != request.user:
+            return Response({'error': 'Unauthorized'}, status=status.HTTP_403_FORBIDDEN)
+        
+        serializer = EndpointSerializer(endpoint, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    except Endpoint.DoesNotExist:
+        return Response({'error': 'Endpoint not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 @ratelimit(key='ip', rate='3/h', method='POST')  # Only 3 requests per hour per IP

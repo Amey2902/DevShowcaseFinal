@@ -11,6 +11,7 @@ urlpatterns = [
     path('techstack/', views.techstack_create, name='techstack-create'),
     path('architecture/', views.architecture_create, name='architecture-create'),
     path('endpoints/', views.endpoint_create, name='endpoint-create'),
+    path('endpoints/<int:endpoint_id>/update/', views.endpoint_update, name='endpoint-update'),
     path('endpoints/<int:endpoint_id>/delete/', views.endpoint_delete, name='endpoint-delete'),
     path('projects/<slug:slug>/explain/', views.project_explain, name='project-explain'),
     path('projects/search/ai/', views.project_search_ai, name='project-search-ai'),
