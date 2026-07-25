@@ -217,14 +217,15 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId, liveBaseUrl = ''
     setTranslationError('')
 
     try {
+      const token = localStorage.getItem('token')
+      const headers = { 'Content-Type': 'application/json' }
+      if (token && token !== 'null' && token !== 'undefined') {
+        headers['Authorization'] = `Token ${token}`
+      }
+
       const response = await axios.post(`/api/projects/${projectId}/translate/`, {
         target_framework: selectedFramework
-      }, {
-        headers: {
-          'Authorization': `Token ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        }
-      })
+      }, { headers })
 
       setTranslatedCode(response.data)
       toast.success(`Successfully translated to ${frameworks.find(f => f.id === selectedFramework)?.name}`)

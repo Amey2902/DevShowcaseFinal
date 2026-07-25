@@ -24,12 +24,15 @@ const APITranslator = ({ projectId, endpoints }) => {
     setError('')
 
     try {
+      const token = localStorage.getItem('token')
+      const headers = { 'Content-Type': 'application/json' }
+      if (token && token !== 'null' && token !== 'undefined') {
+        headers['Authorization'] = `Token ${token}`
+      }
+
       const response = await fetch(`/api/projects/${projectId}/translate/`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Token ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
+        headers,
         body: JSON.stringify({
           target_framework: selectedFramework
         })
