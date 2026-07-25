@@ -52,9 +52,6 @@ const EndpointsTab = ({ project, onUpdate }) => {
     name: '', method: 'GET', url: '', description: '', headers: '{}', sample_body: '{}', request_schema: '{}'
   })
 
-  // Debug logging
-  console.log('EndpointsTab - project:', project)
-  console.log('EndpointsTab - project.endpoints:', project?.endpoints)
 
   // Safety check for endpoints
   const endpoints = project?.endpoints || []
