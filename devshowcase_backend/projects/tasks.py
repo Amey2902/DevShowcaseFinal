@@ -59,75 +59,10 @@ def process_upload_pipeline(upload_id):
         upload.project.live_base_url = base_url
         upload.project.save(update_fields=['live_base_url'])
 
-        # Step 5: Generate Architecture (if requested)
-        architecture_nodes_created = 0
-        if upload.generate_architecture:
-            try:
-                upload.current_message = 'Generating architecture diagram...'
-                upload.progress_percentage = 85
-                upload.save()
-                
-                from .services.architecture_analyzer import ArchitectureAnalyzer
-                from .services.architecture_node_generator import ArchitectureNodeGenerator
-                
-                # Analyze project architecture
-                arch_analyzer = ArchitectureAnalyzer()
-                arch_analysis = arch_analyzer.analyze_project_structure(temp_dir)
-                
-                # Generate architecture nodes
-                node_generator = ArchitectureNodeGenerator()
-                components = arch_analysis.get('components', [])
-                
-                if components:
-                    nodes = node_generator.generate_nodes(components, upload.project, upload)
-                    saved_nodes = node_generator.save_nodes(nodes)
-                    architecture_nodes_created = len(saved_nodes)
-                    
-                    upload.architecture_nodes_created = architecture_nodes_created
-                    
-                    # Convert ArchitecturalComponent objects to dicts for JSON serialization
-                    serializable_analysis = {
-                        'project_type': arch_analysis.get('project_type'),
-                        'components': [
-                            {
-                                'name': comp.name,
-                                'component_type': comp.component_type.value if hasattr(comp.component_type, 'value') else str(comp.component_type),
-                                'technology': comp.technology,
-                                'description': comp.description,
-                                'confidence_score': comp.confidence_score,
-                                'source_files': comp.source_files,
-                                'dependencies': comp.dependencies,
-                                'suggested_position': comp.suggested_position
-                            } for comp in components
-                        ],
-                        'frameworks': arch_analysis.get('frameworks', {}),
-                        'dependencies': arch_analysis.get('dependencies', []),
-                        'connections': arch_analysis.get('connections', [])
-                    }
-                    
-                    upload.architecture_analysis_data = serializable_analysis
-                    upload.save()
-                    
-                    print(f"Generated {architecture_nodes_created} architecture nodes")
-                else:
-                    print("No architectural components detected for diagram generation")
-                    
-            except Exception as e:
-                # Don't fail the entire upload if architecture generation fails
-                print(f"Architecture generation failed: {str(e)}")
-                upload.architecture_analysis_data = {'error': str(e)}
-                upload.save()
-        
         # Mark as completed
         upload.status = 'completed'
         upload.progress_percentage = 100
-        
-        # Update completion message to include architecture info
-        completion_parts = [f'Found {endpoints_count} endpoints']
-        if upload.generate_architecture and architecture_nodes_created > 0:
-            completion_parts.append(f'{architecture_nodes_created} architecture nodes')
-        
-        upload.current_message = f'Analysis complete! {", ".join(completion_parts)}'
+        upload.current_message = f'Analysis complete! Found {endpoints_count} endpoints'
         upload.completed_at = timezone.now()
         upload.save()
         
