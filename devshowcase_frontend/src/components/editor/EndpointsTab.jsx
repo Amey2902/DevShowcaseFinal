@@ -373,7 +373,7 @@ const EndpointsTab = ({ project, onUpdate }) => {
                   </div>
                 </div>
               ) : (
-                <>
+                <div>
 
               {/* URL */}
               <div style={{
@@ -536,7 +536,7 @@ const EndpointsTab = ({ project, onUpdate }) => {
                   )}
                 </div>
               )}
-              </>
+              </div>
             </motion.div>
           ))
         )}
