@@ -174,7 +174,11 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId, liveBaseUrl = ''
   }
 
   const buildHeaders = () => {
-    const result = { 'Content-Type': 'application/json' }
+    const result = { 
+      'Content-Type': 'application/json',
+      'bypass-tunnel-reminder': 'true',
+      'ngrok-skip-browser-warning': 'true'
+    }
     
     // Add custom headers
     headers.filter(h => h.enabled && h.key).forEach(h => {
