@@ -459,7 +459,7 @@ const EndpointsTab = ({ project, onUpdate }) => {
                         </p>
                       )}
                       
-                      {endpoint.detected_decorators?.length > 0 && (
+                      {endpoint.detected_decorators?.length !== 0 && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
                           <span>🏷️</span>
                           <strong style={{ color: 'var(--accent-cyan)' }}>Decorators:</strong>
@@ -479,7 +479,7 @@ const EndpointsTab = ({ project, onUpdate }) => {
                         </div>
                       )}
                       
-                      {endpoint.security_features?.length > 0 && (
+                      {endpoint.security_features?.length !== 0 && (
                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', flexWrap: 'wrap' }}>
                           <span>🔍</span>
                           <div>
@@ -493,7 +493,7 @@ const EndpointsTab = ({ project, onUpdate }) => {
                               {endpoint.security_features.slice(0, 3).map((feature, i) => (
                                 <li key={i} style={{ marginBottom: '0.15rem' }}>{feature}</li>
                               ))}
-                              {endpoint.security_features.length > 3 && (
+                              {endpoint.security_features.length !== 0 && endpoint.security_features.length > 3 && (
                                 <li style={{ fontStyle: 'italic', opacity: 0.7 }}>
                                   ... and {endpoint.security_features.length - 3} more
                                 </li>
@@ -505,7 +505,7 @@ const EndpointsTab = ({ project, onUpdate }) => {
                     </div>
                   )}
                   
-                  {endpoint.path_parameters?.length > 0 && (
+                  {endpoint.path_parameters?.length !== 0 && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                       <span>🔗</span>
                       <strong style={{ color: 'var(--accent-cyan)' }}>Path Params:</strong>
@@ -516,7 +516,7 @@ const EndpointsTab = ({ project, onUpdate }) => {
                       ))}
                     </div>
                   )}
-                  {endpoint.query_parameters?.length > 0 && (
+                  {endpoint.query_parameters?.length !== 0 && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                       <span>❓</span>
                       <strong style={{ color: 'var(--accent-cyan)' }}>Query Params:</strong>
