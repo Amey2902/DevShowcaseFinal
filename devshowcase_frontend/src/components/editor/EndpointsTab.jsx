@@ -199,76 +199,75 @@ const EndpointsTab = ({ project, onUpdate }) => {
               }}
               whileHover={{ boxShadow: 'var(--shadow-glow-sm)' }}
             >
-              {/* AI detected badge */}
-              {endpoint.auto_detected && (
-                <div style={{
-                  position: 'absolute', top: '1rem', right: '1rem',
-                  padding: '0.3rem 0.75rem',
-                  background: 'linear-gradient(135deg, #059669, #34d399)',
-                  color: 'white',
-                  borderRadius: '6px',
-                  fontSize: '0.72rem',
-                  fontWeight: 700,
-                  display: 'flex', alignItems: 'center', gap: '4px',
-                  letterSpacing: '0.04em',
-                }}>
-                  ✨ AI Detected
-                </div>
-              )}
-
-              {/* Method + name row */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+              {/* ── Row 1: Method + Name ── */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.6rem', flexWrap: 'wrap' }}>
                 <span style={{
-                  padding: '0.3rem 0.75rem',
+                  padding: '0.3rem 0.8rem',
                   background: methodColor[endpoint.method] || '#6b7280',
                   color: 'white',
                   borderRadius: '6px',
-                  fontSize: '0.8rem',
+                  fontSize: '0.78rem',
                   fontWeight: 800,
-                  letterSpacing: '0.04em',
+                  letterSpacing: '0.05em',
                   flexShrink: 0,
                 }}>
                   {endpoint.method}
                 </span>
-                <span style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>{endpoint.name}</span>
-                
+                <span style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {endpoint.name}
+                </span>
+                {/* AI Detected badge — inline chip, not absolute */}
+                {endpoint.auto_detected && (
+                  <span style={{
+                    padding: '0.2rem 0.6rem',
+                    background: 'linear-gradient(135deg, #059669, #34d399)',
+                    color: 'white',
+                    borderRadius: '20px',
+                    fontSize: '0.68rem',
+                    fontWeight: 700,
+                    letterSpacing: '0.03em',
+                    flexShrink: 0,
+                    display: 'flex', alignItems: 'center', gap: '3px',
+                  }}>
+                    ✨ AI Detected
+                  </span>
+                )}
+              </div>
+
+              {/* ── Row 2: Security info (left) + Actions (right) ── */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                 {/* Security Level Badge */}
                 {(() => {
                   const effectiveLevel = getEffectiveSecurityLevel(endpoint)
                   const secConfig = getSecurityConfig(effectiveLevel)
                   return (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                       <span style={{
-                        padding: '0.25rem 0.625rem',
+                        padding: '0.2rem 0.55rem',
                         background: secConfig.bgColor,
                         color: secConfig.color,
                         border: `1px solid ${secConfig.borderColor}`,
-                        borderRadius: '6px',
-                        fontSize: '0.75rem',
+                        borderRadius: '20px',
+                        fontSize: '0.72rem',
                         fontWeight: 700,
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '0.25rem'
+                        gap: '0.2rem'
                       }}>
                         {secConfig.icon} {secConfig.label}
                         {endpoint.ast_confidence_score && (
-                          <span style={{ 
-                            fontSize: '0.65rem', 
-                            opacity: 0.8,
-                            marginLeft: '0.25rem'
-                          }}>
+                          <span style={{ fontSize: '0.62rem', opacity: 0.8, marginLeft: '0.2rem' }}>
                             ({Math.round(endpoint.ast_confidence_score * 100)}%)
                           </span>
                         )}
                       </span>
-                      
                       {/* Security Override Dropdown */}
                       <select
                         value={getEffectiveSecurityLevel(endpoint)}
                         onChange={(e) => handleSecurityOverride(endpoint.id, e.target.value)}
                         style={{
-                          padding: '0.2rem 0.4rem',
-                          fontSize: '0.7rem',
+                          padding: '0.18rem 0.35rem',
+                          fontSize: '0.68rem',
                           borderRadius: '4px',
                           border: '1px solid var(--border-primary)',
                           background: 'var(--bg-secondary)',
@@ -285,25 +284,36 @@ const EndpointsTab = ({ project, onUpdate }) => {
                     </div>
                   )
                 })()}
-                
+
                 {endpoint.auth_required && (
                   <span style={{
-                    padding: '0.25rem 0.625rem',
+                    padding: '0.2rem 0.55rem',
                     background: 'rgba(251,191,36,0.15)',
                     color: 'var(--warning)',
                     border: '1px solid rgba(251,191,36,0.3)',
-                    borderRadius: '6px',
-                    fontSize: '0.75rem',
+                    borderRadius: '20px',
+                    fontSize: '0.72rem',
                     fontWeight: 700,
                   }}>🔒 Auth Required</span>
                 )}
-                <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem' }}>
+
+                {/* Action Buttons — pushed to the right */}
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => handleStartEdit(endpoint)}
-                    className="btn btn-secondary"
-                    style={{ padding: '0.35rem 0.875rem', fontSize: '0.8rem' }}
+                    style={{
+                      padding: '0.3rem 0.8rem',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      background: 'rgba(99,102,241,0.15)',
+                      color: '#818cf8',
+                      border: '1px solid rgba(99,102,241,0.35)',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', gap: '4px',
+                    }}
                   >
                     ✏ Edit
                   </motion.button>
@@ -311,13 +321,23 @@ const EndpointsTab = ({ project, onUpdate }) => {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => handleDelete(endpoint.id)}
-                    className="btn btn-danger"
-                    style={{ padding: '0.35rem 0.875rem', fontSize: '0.8rem' }}
+                    style={{
+                      padding: '0.3rem 0.8rem',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      background: 'rgba(239,68,68,0.12)',
+                      color: '#f87171',
+                      border: '1px solid rgba(239,68,68,0.3)',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', gap: '4px',
+                    }}
                   >
                     🗑 Delete
                   </motion.button>
                 </div>
               </div>
+
 
               {/* Inline Edit Form */}
               {editingEndpointId === endpoint.id ? (
