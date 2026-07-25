@@ -374,169 +374,169 @@ const EndpointsTab = ({ project, onUpdate }) => {
                 </div>
               ) : (
                 <div>
+                  {/* URL */}
+                  <div style={{
+                    padding: '0.6rem 1rem',
+                    background: 'rgba(10,15,30,0.6)',
+                    borderRadius: '6px',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.875rem',
+                    color: 'var(--accent-cyan)',
+                    marginBottom: '0.75rem',
+                    border: '1px solid var(--border-primary)',
+                    wordBreak: 'break-all',
+                  }}>
+                    {endpoint.url}
+                  </div>
 
-              {/* URL */}
-              <div style={{
-                padding: '0.6rem 1rem',
-                background: 'rgba(10,15,30,0.6)',
-                borderRadius: '6px',
-                fontFamily: 'var(--font-mono)',
-                fontSize: '0.875rem',
-                color: 'var(--accent-cyan)',
-                marginBottom: '0.75rem',
-                border: '1px solid var(--border-primary)',
-                wordBreak: 'break-all',
-              }}>
-                {endpoint.url}
-              </div>
-
-              {endpoint.description && (
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: 1.65, marginBottom: '0.75rem' }}>
-                  {endpoint.description}
-                </p>
-              )}
-
-              {/* AI-detected metadata */}
-              {endpoint.auto_detected && (
-                <div style={{
-                  padding: '1rem',
-                  background: 'rgba(124,58,237,0.05)',
-                  border: '1px solid rgba(124,58,237,0.15)',
-                  borderRadius: '8px',
-                  marginTop: '0.75rem',
-                  fontSize: '0.85rem',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '0.5rem',
-                }}>
-                  {endpoint.detected_from_file && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                      <span>📁</span>
-                      <strong style={{ color: 'var(--accent-cyan)' }}>Source:</strong>
-                      <span style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>{endpoint.detected_from_file}</span>
-                      {endpoint.detected_at_line && (
-                        <span style={{ padding: '0.1rem 0.5rem', background: 'rgba(124,58,237,0.2)', color: 'var(--accent-cyan)', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700 }}>
-                          Line {endpoint.detected_at_line}
-                        </span>
-                      )}
-                    </div>
+                  {endpoint.description && (
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: 1.65, marginBottom: '0.75rem' }}>
+                      {endpoint.description}
+                    </p>
                   )}
-                  
-                  {/* AST Security Analysis */}
-                  {endpoint.ast_security_level && (
+
+                  {endpoint.auto_detected && (
                     <div style={{
-                      padding: '0.75rem',
-                      background: 'rgba(16, 185, 129, 0.05)',
-                      border: '1px solid rgba(16, 185, 129, 0.15)',
-                      borderRadius: '6px',
-                      marginTop: '0.5rem'
+                      padding: '1rem',
+                      background: 'rgba(124,58,237,0.05)',
+                      border: '1px solid rgba(124,58,237,0.15)',
+                      borderRadius: '8px',
+                      marginTop: '0.75rem',
+                      fontSize: '0.85rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.5rem',
                     }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                        <span>🧠</span>
-                        <strong style={{ color: 'var(--accent-cyan)' }}>AST Security Analysis:</strong>
-                        {endpoint.user_security_override && (
-                          <span style={{
-                            padding: '0.15rem 0.5rem',
-                            background: 'rgba(59, 130, 246, 0.2)',
-                            color: 'var(--accent-primary)',
-                            borderRadius: '4px',
-                            fontSize: '0.7rem',
-                            fontWeight: 700
-                          }}>
-                            User Override Active
-                          </span>
-                        )}
-                      </div>
-                      
-                      {endpoint.ast_reasoning && (
-                        <p style={{ 
-                          color: 'var(--text-secondary)', 
-                          fontSize: '0.8rem', 
-                          marginBottom: '0.5rem',
-                          fontStyle: 'italic'
-                        }}>
-                          {endpoint.ast_reasoning}
-                        </p>
+                      {endpoint.detected_from_file && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <span>📁</span>
+                          <strong style={{ color: 'var(--accent-cyan)' }}>Source:</strong>
+                          <span style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>{endpoint.detected_from_file}</span>
+                          {endpoint.detected_at_line && (
+                            <span style={{ padding: '0.1rem 0.5rem', background: 'rgba(124,58,237,0.2)', color: 'var(--accent-cyan)', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700 }}>
+                              Line {endpoint.detected_at_line}
+                            </span>
+                          )}
+                        </div>
                       )}
-                      
-                      {endpoint.detected_decorators?.length !== 0 && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
-                          <span>🏷️</span>
-                          <strong style={{ color: 'var(--accent-cyan)' }}>Decorators:</strong>
-                          {endpoint.detected_decorators.map((decorator, i) => (
-                            <span key={i} style={{ 
-                              padding: '0.15rem 0.5rem', 
-                              background: 'rgba(16, 185, 129, 0.2)', 
-                              color: 'var(--success)', 
-                              borderRadius: '4px', 
-                              fontSize: '0.75rem', 
-                              fontWeight: 700,
-                              fontFamily: 'var(--font-mono)'
+
+                      {endpoint.ast_security_level && (
+                        <div style={{
+                          padding: '0.75rem',
+                          background: 'rgba(16, 185, 129, 0.05)',
+                          border: '1px solid rgba(16, 185, 129, 0.15)',
+                          borderRadius: '6px',
+                          marginTop: '0.5rem'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                            <span>🧠</span>
+                            <strong style={{ color: 'var(--accent-cyan)' }}>AST Security Analysis:</strong>
+                            {endpoint.user_security_override && (
+                              <span style={{
+                                padding: '0.15rem 0.5rem',
+                                background: 'rgba(59, 130, 246, 0.2)',
+                                color: 'var(--accent-primary)',
+                                borderRadius: '4px',
+                                fontSize: '0.7rem',
+                                fontWeight: 700
+                              }}>
+                                User Override Active
+                              </span>
+                            )}
+                          </div>
+
+                          {endpoint.ast_reasoning && (
+                            <p style={{
+                              color: 'var(--text-secondary)',
+                              fontSize: '0.8rem',
+                              marginBottom: '0.5rem',
+                              fontStyle: 'italic'
                             }}>
-                              {decorator}
+                              {endpoint.ast_reasoning}
+                            </p>
+                          )}
+
+                          {endpoint.detected_decorators && endpoint.detected_decorators.length !== 0 && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                              <span>🏷️</span>
+                              <strong style={{ color: 'var(--accent-cyan)' }}>Decorators:</strong>
+                              {endpoint.detected_decorators.map((decorator, i) => (
+                                <span key={i} style={{
+                                  padding: '0.15rem 0.5rem',
+                                  background: 'rgba(16, 185, 129, 0.2)',
+                                  color: 'var(--success)',
+                                  borderRadius: '4px',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 700,
+                                  fontFamily: 'var(--font-mono)'
+                                }}>
+                                  {decorator}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          {endpoint.security_features && endpoint.security_features.length !== 0 && (
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', flexWrap: 'wrap' }}>
+                              <span>🔍</span>
+                              <div>
+                                <strong style={{ color: 'var(--accent-cyan)' }}>Security Features:</strong>
+                                <ul style={{
+                                  margin: '0.25rem 0 0 1rem',
+                                  padding: 0,
+                                  fontSize: '0.75rem',
+                                  color: 'var(--text-secondary)'
+                                }}>
+                                  {endpoint.security_features.slice(0, 3).map((feature, i) => (
+                                    <li key={i} style={{ marginBottom: '0.15rem' }}>{feature}</li>
+                                  ))}
+                                  {endpoint.security_features.length !== 0 && endpoint.security_features.length !== 1 && endpoint.security_features.length !== 2 && endpoint.security_features.length !== 3 && (
+                                    <li style={{ fontStyle: 'italic', opacity: 0.7 }}>
+                                      ... and {endpoint.security_features.length - 3} more
+                                    </li>
+                                  )}
+                                </ul>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {endpoint.path_parameters && endpoint.path_parameters.length !== 0 && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <span>🔗</span>
+                          <strong style={{ color: 'var(--accent-cyan)' }}>Path Params:</strong>
+                          {endpoint.path_parameters.map((p, i) => (
+                            <span key={i} style={{ padding: '0.15rem 0.5rem', background: 'rgba(234,88,12,0.2)', color: 'var(--accent-primary)', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700 }}>
+                              {typeof p === 'object' ? p.name || JSON.stringify(p) : p}
                             </span>
                           ))}
                         </div>
                       )}
-                      
-                      {endpoint.security_features?.length !== 0 && (
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', flexWrap: 'wrap' }}>
-                          <span>🔍</span>
-                          <div>
-                            <strong style={{ color: 'var(--accent-cyan)' }}>Security Features:</strong>
-                            <ul style={{ 
-                              margin: '0.25rem 0 0 1rem', 
-                              padding: 0, 
-                              fontSize: '0.75rem',
-                              color: 'var(--text-secondary)'
-                            }}>
-                              {endpoint.security_features.slice(0, 3).map((feature, i) => (
-                                <li key={i} style={{ marginBottom: '0.15rem' }}>{feature}</li>
-                              ))}
-                              {endpoint.security_features.length !== 0 && endpoint.security_features.length > 3 && (
-                                <li style={{ fontStyle: 'italic', opacity: 0.7 }}>
-                                  ... and {endpoint.security_features.length - 3} more
-                                </li>
-                              )}
-                            </ul>
-                          </div>
+
+                      {endpoint.query_parameters && endpoint.query_parameters.length !== 0 && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <span>❓</span>
+                          <strong style={{ color: 'var(--accent-cyan)' }}>Query Params:</strong>
+                          {endpoint.query_parameters.map((p, i) => (
+                            <span key={i} style={{ padding: '0.15rem 0.5rem', background: 'rgba(124,58,237,0.2)', color: 'var(--accent-cyan)', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700 }}>
+                              {typeof p === 'object' ? p.name || JSON.stringify(p) : p}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {endpoint.auth_type && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span>🔐</span>
+                          <strong style={{ color: 'var(--accent-cyan)' }}>Auth:</strong>
+                          <span style={{ padding: '0.15rem 0.5rem', background: 'rgba(251,191,36,0.2)', color: 'var(--warning)', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700 }}>{endpoint.auth_type}</span>
                         </div>
                       )}
                     </div>
                   )}
-                  
-                  {endpoint.path_parameters?.length !== 0 && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                      <span>🔗</span>
-                      <strong style={{ color: 'var(--accent-cyan)' }}>Path Params:</strong>
-                      {endpoint.path_parameters.map((p, i) => (
-                        <span key={i} style={{ padding: '0.15rem 0.5rem', background: 'rgba(234,88,12,0.2)', color: 'var(--accent-primary)', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700 }}>
-                          {typeof p === 'object' ? p.name || JSON.stringify(p) : p}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  {endpoint.query_parameters?.length !== 0 && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                      <span>❓</span>
-                      <strong style={{ color: 'var(--accent-cyan)' }}>Query Params:</strong>
-                      {endpoint.query_parameters.map((p, i) => (
-                        <span key={i} style={{ padding: '0.15rem 0.5rem', background: 'rgba(124,58,237,0.2)', color: 'var(--accent-cyan)', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700 }}>
-                          {typeof p === 'object' ? p.name || JSON.stringify(p) : p}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  {endpoint.auth_type && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span>🔐</span>
-                      <strong style={{ color: 'var(--accent-cyan)' }}>Auth:</strong>
-                      <span style={{ padding: '0.15rem 0.5rem', background: 'rgba(251,191,36,0.2)', color: 'var(--warning)', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700 }}>{endpoint.auth_type}</span>
-                    </div>
-                  )}
                 </div>
               )}
-              </div>
             </motion.div>
           ))
         )}
