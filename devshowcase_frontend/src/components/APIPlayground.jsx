@@ -589,7 +589,7 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId, liveBaseUrl = ''
                 {liveBaseUrlOverride.trim() || liveBaseUrl || '(using endpoint URLs as-is)'}
               </code>
             </p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
               <label style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
                 Override base URL:
               </label>
@@ -611,6 +611,24 @@ const APIPlayground = ({ endpoints, isOwner = false, projectId, liveBaseUrl = ''
                 }}
               />
             </div>
+            <details style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+              <summary style={{ cursor: 'pointer', fontWeight: '600', color: '#f87171' }}>
+                💡 How to test your API in Live Mode? (Click to expand guide)
+              </summary>
+              <div style={{ marginTop: '0.5rem', padding: '0.75rem', background: 'rgba(0,0,0,0.3)', borderRadius: '6px', lineHeight: '1.5' }}>
+                <p style={{ margin: '0 0 0.4rem 0' }}><strong>🔹 Local API (running on your PC):</strong></p>
+                <div style={{ margin: '0 0 0.5rem 0', padding: '0.4rem 0.6rem', background: '#0f172a', borderRadius: '4px', fontFamily: 'var(--font-mono)', color: '#38bdf8' }}>
+                  npx localtunnel --port [YOUR_PORT]
+                </div>
+                <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.78rem', color: '#94a3b8' }}>
+                  Copy the generated <code>https://...</code> link and paste it into the <strong>Override base URL</strong> box above.
+                </p>
+                <p style={{ margin: '0 0 0.4rem 0' }}><strong>🔹 Production API (deployed online):</strong></p>
+                <p style={{ margin: 0, fontSize: '0.78rem', color: '#94a3b8' }}>
+                  Paste your public server URL (e.g. <code>https://api.myproject.com</code>) into the box above.
+                </p>
+              </div>
+            </details>
           </div>
         </div>
       )}
