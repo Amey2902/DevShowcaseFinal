@@ -601,13 +601,15 @@ def upload_retry(request, upload_id):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def translate_api(request, project_id):
     """Translate detected API endpoints to a different framework."""
     from .services.api_translator import APITranslator
     
     try:
-        project = Project.objects.get(id=project_id, owner=request.user)
+        project = Project.objects.get(id=project_id)
+        if not project.is_published and (not request.user.is_authenticated or project.owner != request.user):
+            return Response({'error': 'Project is not published'}, status=status.HTTP_403_FORBIDDEN)
     except Project.DoesNotExist:
         return Response({'error': 'Project not found'}, status=status.HTTP_404_NOT_FOUND)
     
