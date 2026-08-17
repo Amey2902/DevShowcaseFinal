@@ -17,7 +17,7 @@ class AnalysisEngine:
     }
     
     GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
-    GROQ_MODEL = 'llama-3.1-8b-instant'  # Free tier: 6000 TPM limit (input+output combined)
+    GROQ_MODEL = getattr(settings, 'GROQ_MODEL', 'llama-3.1-8b-instant')
     
     def __init__(self, upload_instance):
         """Initialize with a ProjectUpload instance."""

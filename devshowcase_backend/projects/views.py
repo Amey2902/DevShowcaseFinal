@@ -240,7 +240,7 @@ Keep it professional but conversational. Around 200-300 words."""
         
         client = Groq(api_key=api_key)
         completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=getattr(settings, 'GROQ_MODEL', 'llama-3.1-8b-instant'),
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
             max_tokens=500
@@ -317,7 +317,7 @@ Sort by match_percentage descending. Only include projects with match >= 30%."""
         
         client = Groq(api_key=api_key)
         completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model=getattr(settings, 'GROQ_MODEL', 'llama-3.1-8b-instant'),
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
             max_tokens=1000

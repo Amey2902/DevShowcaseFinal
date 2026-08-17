@@ -114,6 +114,7 @@ CORS_ALLOW_CREDENTIALS = True
 
 # Groq AI Configuration
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY')  # MUST be set in .env file
+GROQ_MODEL = os.environ.get('GROQ_MODEL', 'llama-3.1-8b-instant')
 
 # Validate that API key is set
 if not GROQ_API_KEY:
