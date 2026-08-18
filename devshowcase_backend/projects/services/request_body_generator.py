@@ -7,7 +7,7 @@ class RequestBodyGenerator:
     """Generate realistic request bodies for API endpoints using AI or schema."""
     
     GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
-    GROQ_MODEL = getattr(settings, 'GROQ_MODEL', 'llama-3.1-8b-instant')
+    GROQ_MODEL = getattr(settings, 'GROQ_MODEL', 'openai/gpt-oss-20b')
     
     @staticmethod
     def generate_from_schema(schema):

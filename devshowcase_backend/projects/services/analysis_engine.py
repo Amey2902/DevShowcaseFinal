@@ -17,7 +17,7 @@ class AnalysisEngine:
     }
     
     GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
-    GROQ_MODEL = getattr(settings, 'GROQ_MODEL', 'llama-3.1-8b-instant')
+    GROQ_MODEL = getattr(settings, 'GROQ_MODEL', 'openai/gpt-oss-20b')
     
     def __init__(self, upload_instance):
         """Initialize with a ProjectUpload instance."""
@@ -841,7 +841,7 @@ Return ONLY this JSON (no markdown):
         }
         
         payload = {
-            'model': self.GROQ_MODEL,
+            'model': getattr(settings, 'GROQ_MODEL', self.GROQ_MODEL),
             'messages': [
                 {'role': 'user', 'content': prompt}
             ],

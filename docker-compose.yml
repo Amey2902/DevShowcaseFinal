@@ -33,7 +33,7 @@ services:
       DEBUG: "False"
       DATABASE_URL: postgres://devshowcase_user:${DB_PASSWORD}@db:5432/devshowcase
       GROQ_API_KEY: ${GROQ_API_KEY}
-      GROQ_MODEL: ${GROQ_MODEL:-llama-3.1-8b-instant}
+      GROQ_MODEL: ${GROQ_MODEL:-openai/gpt-oss-20b}
       EMAIL_HOST_USER: ${EMAIL_HOST_USER}
       EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD}
       FRONTEND_URL: ${FRONTEND_URL}

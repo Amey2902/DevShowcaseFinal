@@ -5,7 +5,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
-GROQ_MODEL = getattr(settings, 'GROQ_MODEL', 'llama-3.1-8b-instant')
+GROQ_MODEL = getattr(settings, 'GROQ_MODEL', 'openai/gpt-oss-20b')
 
 BASE_SYSTEM_PROMPT = (
     "You are a helpful assistant for the DevShowcase platform, specialising in API development, "
