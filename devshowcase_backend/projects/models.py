@@ -56,7 +56,7 @@ class ArchitectureNode(models.Model):
     
     # AI generation tracking fields
     is_ai_generated = models.BooleanField(default=False)
-    ai_generation_source = models.CharField(max_length=255, blank=True)  # e.g., "package.json", "requirements.txt"
+    ai_generation_source = models.TextField(blank=True)  # e.g., "package.json", "requirements.txt"
     created_by_upload = models.ForeignKey('ProjectUpload', on_delete=models.SET_NULL, null=True, blank=True)
     ai_confidence_score = models.FloatField(null=True, blank=True)  # 0.0-1.0 confidence in detection
     

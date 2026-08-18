@@ -134,12 +134,12 @@ if USE_GMAIL:
     EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'your-email@gmail.com')
     EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
     DEFAULT_FROM_EMAIL = f'DevShowcase <{EMAIL_HOST_USER}>'
-    print(f"📧 Email configured: Gmail SMTP ({EMAIL_HOST_USER})")
+    print(f"[Email] Configured: Gmail SMTP ({EMAIL_HOST_USER})")
 else:
     # Console backend for development (prints to terminal)
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
     DEFAULT_FROM_EMAIL = 'DevShowcase <noreply@devshowcase.com>'
-    print("📧 Email configured: Console (prints to terminal)")
+    print("[Email] Configured: Console (prints to terminal)")
 
 # Frontend URL (for magic link)
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
